@@ -1,0 +1,47 @@
+# Visual Studio build output and local settings
+.vs/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bin/
+obj/
+verify_obj/
+verify_x86/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.exe
+*.dll
+*.obj
+*.pdb
+*.idb
+*.ilk
+*.ipdb
+*.iobj
+*.tlog
+*.log
+
+# Python caches and temporary files
+__pycache__/
+*.py[cod]
+*.tmp
+tmp*/
+.env
+.env.*
+!.env.example
+
+# Duplicate archives and unrelated course materials
+*.zip
+/课件/
+/ppt/
+/文档1 (1)(1).docx
+/文档制作/render/
+
+# Local account/student data and coursework documents
+*.dat
+*.docx
+*.pptx
+/作业要求.txt
+/修复版手工测试/表格效果预览.txt
