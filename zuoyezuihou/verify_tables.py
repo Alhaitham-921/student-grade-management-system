@@ -29,8 +29,12 @@ with tempfile.TemporaryDirectory(dir=root) as d:
  assert '...' in out and 'Alice王' in out and '张明' in out
  print(f'PASS: {count} table rows aligned, Chinese/ASCII mixed text, clipped long class names, all lists and ranking modes; tables fit 120 columns')
 # Preview using a copy of the supplied demo data, without changing user records.
+source=root.parent/'修复版手工测试'
+fixtures = [source/name for name in ('users.dat','students.dat','classes.dat')]
+if not all(p.exists() and p.stat().st_size > 8 for p in fixtures):
+ print('SKIP: demo preview fixtures are not supplied')
+ raise SystemExit(0)
 with tempfile.TemporaryDirectory(dir=root) as d:
- source=root.parent/'修复版手工测试'
  for name in ('users.dat','students.dat','classes.dat'):shutil.copy2(source/name,Path(d)/name)
  seq=['2','demo_math','Teacher123','8','1',str(source/'导入测试文件/1班_数学.csv'),'9','10','5','1','7','4']
  out=run(d,seq)
