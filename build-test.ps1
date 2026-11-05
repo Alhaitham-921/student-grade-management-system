@@ -11,7 +11,8 @@ if (!$builder) { throw 'Environment: VS2022 MSBuild / C++ tools not found.' }
 $installation = & $locator -latest -version '[17.0,18.0)' -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 $developerCommand = Join-Path $installation 'Common7\Tools\VsDevCmd.bat'
 $targetArch = if ($Platform -eq 'Win32') { 'x86' } else { 'x64' }
-$setupLines = & cmd /d /s /c "`"`"$developerCommand`" -no_logo -host_arch=x64 -arch=$targetArch >nul && set`""
+$setupCommand = 'call "{0}" -no_logo -host_arch=x64 -arch={1} >nul && set' -f $developerCommand,$targetArch
+$setupLines = & cmd /d /c $setupCommand
 if ($LASTEXITCODE -ne 0) { throw 'Environment: failed to initialise VS developer tools.' }
 foreach ($line in $setupLines) {
     $separator = $line.IndexOf('=')
