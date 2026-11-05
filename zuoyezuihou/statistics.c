@@ -1,21 +1,25 @@
 #include "maintenance.h"
 static int eligible(int i, int c)
 {
-    return currentUser.type == TEACHER && studentClass(students[i].stuNum) == c && hasTeacherAccess(&students[i]);
+    return (currentUser.type == TEACHER || currentUser.type == ADMIN) && studentClass(students[i].stuNum) == c &&
+           hasTeacherAccess(&students[i]);
 }
 void classStatistics(void)
 {
-    if (currentUser.type != TEACHER)
+    if (currentUser.type != TEACHER && currentUser.type != ADMIN)
         return;
     int c = selectClass();
     if (c < 0)
+        return;
+    char course[30];
+    if (!selectCourse(course, sizeof(course)))
         return;
     int valid = 0, missing = 0, pass = 0;
     double sum = 0, lo = 100, hi = 0;
     for (int i = 0; i < studentCount; i++)
         if (eligible(i, c))
         {
-            int j = courseIndex(&students[i], currentUser.teachCourse);
+            int j = courseIndex(&students[i], course);
             if (j < 0)
             {
                 missing++;
@@ -31,8 +35,7 @@ void classStatistics(void)
             if (v >= PASS_SCORE)
                 pass++;
         }
-    printf("班级: %s 科目: %s 有成绩人数: %d 未录入人数: %d\n", schoolClasses[c].name, currentUser.teachCourse, valid,
-           missing);
+    printf("班级: %s 科目: %s 有成绩人数: %d 未录入人数: %d\n", schoolClasses[c].name, course, valid, missing);
     if (!valid)
     {
         printf("平均分: -- 最高分: -- 最低分: -- 及格率: --\n");
@@ -102,14 +105,14 @@ void classQuery(void)
     int c = selectClass();
     if (c < 0)
         return;
-    int mode = safeReadInt("1按学生查看完整成绩 / 2当前任教科目 / 0取消: ", 0, 2);
-    if (!mode)
+    const char *m[] = {"按学生查看完整成绩", "当前任教科目", "返回上一级"};
+    int mode = menuChoice("教师 / 按班级查询", m, 3);
+    if (mode < 1 || mode == 3)
         return;
     if (mode == 1)
     {
         char id[20];
-        safeReadString(id, sizeof(id), "学号 (0取消): ");
-        if (!strcmp(id, "0"))
+        if (readStudentId(id, sizeof(id), "学号 (:q取消): ") != INPUT_OK)
             return;
         int s = findStudentIndex(id);
         if (s < 0 || !eligible(s, c))
@@ -142,4 +145,87 @@ void classQuery(void)
             }
         }
     tableEnd();
+}
+
+int selectCourse(char *course, size_t capacity)
+{
+    if (currentUser.type == TEACHER)
+    {
+        snprintf(course, capacity, "%s", currentUser.teachCourse);
+        return 1;
+    }
+    if (currentUser.type != ADMIN)
+        return 0;
+    char courses[MAX_USERS + MAX_STUDENTS * MAX_COURSES][30];
+    int n = 0;
+    for (int i = 0; i < userCount; i++)
+        if (users[i].type == TEACHER && users[i].teachCourse[0])
+        {
+            int duplicate = 0;
+            for (int j = 0; j < n; j++)
+                if (!strcmp(courses[j], users[i].teachCourse))
+                    duplicate = 1;
+            if (!duplicate)
+                strcpy(courses[n++], users[i].teachCourse);
+        }
+    for (int s = 0; s < studentCount; s++)
+        for (int k = 0; k < students[s].courseCount; k++)
+        {
+            int duplicate = 0;
+            for (int j = 0; j < n; j++)
+                if (!strcmp(courses[j], students[s].courses[k].course))
+                    duplicate = 1;
+            if (!duplicate)
+                strcpy(courses[n++], students[s].courses[k].course);
+        }
+    if (!n)
+    {
+        printf("暂无科目。\n");
+        return 0;
+    }
+    const int w[] = {6, 24};
+    const char *h[] = {"序号", "科目"};
+    tableStart(2, w, h);
+    for (int j = 0; j < n; j++)
+        tableRow("ds", j + 1, courses[j]);
+    tableEnd();
+    printf("%d. 返回上一级\n", n + 1);
+    int k = safeReadInt("选择科目: ", 1, n + 1);
+    if (k < 1 || k == n + 1)
+        return 0;
+    snprintf(course, capacity, "%s", courses[k - 1]);
+    return 1;
+}
+void adminScoreQuery(void)
+{
+    if (currentUser.type != ADMIN)
+        return;
+    int c = selectClass();
+    if (c < 0)
+        return;
+    char course[30];
+    if (!selectCourse(course, sizeof(course)))
+        return;
+    const int w[] = {20, 20, 24, 10};
+    const char *h[] = {"学号", "姓名", "科目", "成绩"};
+    tableStart(4, w, h);
+    int n = 0;
+    for (int i = 0; i < studentCount; i++)
+        if (studentClass(students[i].stuNum) == c)
+        {
+            int j = courseIndex(&students[i], course);
+            char score[32] = "--";
+            if (j >= 0)
+                snprintf(score, sizeof(score), "%.1f", students[i].courses[j].score);
+            tableRow("ssss", students[i].stuNum, students[i].name, course, score);
+            if (++n % 10 == 0)
+            {
+                tableEnd();
+                if (!pageNext(n))
+                    return;
+                tableStart(4, w, h);
+            }
+        }
+    tableEnd();
+    printf("班级: %s 科目: %s\n", schoolClasses[c].name, course);
 }

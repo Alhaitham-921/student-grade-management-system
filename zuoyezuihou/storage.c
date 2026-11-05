@@ -17,7 +17,7 @@ typedef struct
     SchoolClass classes[MAX_CLASSES];
     char names[MAX_USERS][60];
     int inactive[MAX_CLASSES];
-    int nu, ns, nc;
+    int nu, ns, nc, seedVersion;
 } State;
 static State baseline;
 static int baselineReady, ioOK = 1, auditOverflow;
@@ -34,6 +34,7 @@ static void capture(State *s)
     s->nu = userCount;
     s->ns = studentCount;
     s->nc = classCount;
+    s->seedVersion = demoSeedVersion;
 }
 static void restore(void)
 {
@@ -45,6 +46,7 @@ static void restore(void)
     userCount = baseline.nu;
     studentCount = baseline.ns;
     classCount = baseline.nc;
+    demoSeedVersion = baseline.seedVersion;
     for (int i = 0; i < userCount; i++)
         if (!strcmp(users[i].username, currentUser.username))
             currentUser = users[i];
@@ -151,13 +153,15 @@ static uint32_t checksum(const char *path)
 static void header(FILE *f, int kind)
 {
     put32(f, 0x534d4753);
-    put32(f, 1);
+    put32(f, kind==3?2:1);
     put32(f, (uint32_t)kind);
 }
+static uint32_t recordVersion;
 static int readHeader(FILE *f, int kind)
 {
     uint32_t a = get32(f), b = get32(f), c = get32(f);
-    return ioOK && a == 0x534d4753 && b == 1 && c == (uint32_t)kind;
+    recordVersion=b;
+    return ioOK && a == 0x534d4753 && (b == 1 || (kind==3&&b==2)) && c == (uint32_t)kind;
 }
 static int finish(FILE *f)
 {
@@ -233,6 +237,7 @@ static int writePart(const char *dir, int kind)
         put32(f, classCount);
         for (int i = 0; i < classCount; i++)
             put32(f, classInactive[i]);
+        put32(f,demoSeedVersion);
     }
     return finish(f);
 }
@@ -248,6 +253,7 @@ static int readPart(const char *dir, int kind)
         fclose(f);
         return 0;
     }
+    uint32_t version = recordVersion;
     uint32_t n = get32(f);
     if (kind == 0)
     {
@@ -341,6 +347,7 @@ static int readPart(const char *dir, int kind)
                     ioOK = 0;
             }
     }
+    if(kind==3){demoSeedVersion=version>=2?(int)get32(f):0;if(demoSeedVersion<0||demoSeedVersion>1)ioOK=0;}
     int ok = ioOK && fgetc(f) == EOF && !ferror(f);
     fclose(f);
     return ok;

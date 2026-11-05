@@ -3,45 +3,42 @@
 #include "admin.h"
 #include "teacher.h"
 #include "student.h"
-
-int main() {
+int main(void)
+{
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
-    if (!storageOpen()) return EXIT_FAILURE;
+    if (!storageOpen())
+        return EXIT_FAILURE;
     loadAll();
     initSystem();
-    if (!saveAll()) return EXIT_FAILURE;
-
-    int choice;
-
-    while (1) {
+    if (!saveAll())
+        return EXIT_FAILURE;
+    if (!migrateTeachers())
+        return EXIT_FAILURE;
+#ifdef SGMS_INITIALIZER
+    strcpy(currentUser.username, "maintenance");
+    currentUser.type = ADMIN;
+    return seedDemoData(1) ? 0 : 1;
+#endif
+    while (!inputFinished())
+    {
         clearScreen();
-        printf("\n[学生成绩管理系统]\n");
-        printf("1. 管理员登录\n2. 教师登录\n3. 学生登录\n4. 退出\n选择: ");
-
-        choice = safeReadInt("", 1, 4);
-
-        switch (choice) {
-        case 1:
-            if (login(ADMIN)) {
-                adminMenu();  // 调用管理员菜单
-            }
+        const char *m[] = {"管理员登录", "教师登录", "学生登录", "退出系统"};
+        int choice = menuChoice("学生成绩管理系统", m, 4);
+        if (choice < 1 || choice == 4)
             break;
-        case 2:
-            if (login(TEACHER)) {
-                teacherMenu();  // 调用教师菜单
-            }
-            break;
-        case 3:
-            if (login(STUDENT)) {
-                studentMenu();  // 调用学生菜单
-            }
-            break;
-        case 4:
-            printf("感谢使用系统，再见！\n");
-            return 0;
+        UserType type = choice == 1 ? ADMIN : choice == 2 ? TEACHER : STUDENT;
+        if (login(type))
+        {
+            if (type == ADMIN)
+                adminMenu();
+            else if (type == TEACHER)
+                teacherMenu();
+            else
+                studentMenu();
         }
+        memset(&currentUser, 0, sizeof(currentUser));
     }
-
+    printf("输入结束或已退出，系统正常结束。\n");
     return 0;
 }

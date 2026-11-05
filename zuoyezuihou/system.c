@@ -50,65 +50,6 @@ User currentUser;
 SchoolClass schoolClasses[MAX_CLASSES];
 int classCount = 0;
 
-// Read one complete line; never leave excess input for the next prompt.
-static void readLine(char* buffer, size_t size, const char* prompt) {
-    for (;;) {
-        printf("%s", prompt);
-        fflush(stdout);
-        if (!fgets(buffer, (int)size, stdin)) exit(0);
-        char* newline = strchr(buffer, '\n');
-        if (newline) { *newline = 0; return; }
-        int ch = getchar();
-        if (ch == '\n' || ch == EOF) return;
-        while (ch != '\n' && ch != EOF) ch = getchar();
-        printf("输入过长，请重新输入！\n");
-    }
-}
-void safeReadString(char* buffer, size_t size, const char* prompt) {
-    for (;;) {
-        readLine(buffer, size, prompt);
-        int nonempty = 0;
-        for (size_t i = 0; buffer[i]; ++i)
-            if (!isspace((unsigned char)buffer[i])) nonempty = 1;
-        if (nonempty) {
-            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buffer, -1, NULL, 0)) return;
-            printf("输入必须为有效UTF-8文本。\n"); continue;
-        }
-        printf("输入不能为空！\n");
-    }
-}
-int safeReadInt(const char* prompt, int min, int max) {
-    char buffer[100], *end;
-    for (;;) {
-        readLine(buffer, sizeof(buffer), prompt);
-        errno = 0;
-        long value = strtol(buffer, &end, 10);
-        int valid = end != buffer;
-        while (isspace((unsigned char)*end)) ++end;
-        if (valid && !*end && !errno && value >= min && value <= max) return (int)value;
-        printf("请输入 %d 到 %d 之间的整数。\n", min, max);
-    }
-}
-float safeReadFloat(const char* prompt, float min, float max) {
-    char buffer[100], *end;
-    for (;;) {
-        readLine(buffer, sizeof(buffer), prompt);
-        errno = 0;
-        float value = strtof(buffer, &end);
-        int valid = end != buffer;
-        while (isspace((unsigned char)*end)) ++end;
-        if (valid && !*end && !errno && isfinite(value) && value >= min && value <= max) return value;
-        printf("请输入 %.1f 到 %.1f 之间的分数。\n", min, max);
-    }
-}
-void clearScreen(void) {
-    if (_isatty(_fileno(stdin))) system("cls");
-}
-void pauseScreen(void) {
-    if (_isatty(_fileno(stdin))) {
-        char buffer[8]; readLine(buffer, sizeof(buffer), "按回车继续...");
-    }
-}
 void refreshAverages(void) {
     for (int i = 0; i < studentCount; ++i) {
         float sum = 0;
@@ -117,7 +58,7 @@ void refreshAverages(void) {
     }
 }
 // 初始化系统，创建默认管理员账户
-void initSystem() {
+void initSystem(void) {
     if (userCount == 0) {
         User admin = { 0 };
         strcpy(admin.username, "admin");
@@ -305,8 +246,7 @@ int login(UserType requiredType) {
         printf("\n[登录 - %s用户]\n",
             requiredType == ADMIN ? "管理员" :
             requiredType == TEACHER ? "教师" : "学生");
-        safeReadString(username, sizeof(username), "用户名: ");
-        safeReadString(password, sizeof(password), "密码: ");
+        if(safeReadString(username,sizeof(username),"账号 (:q取消): ")!=INPUT_OK||safeReadString(password,sizeof(password),"密码 (:q取消): ")!=INPUT_OK)return 0;
 
         for (int i = 0; i < userCount; i++) {
             if (strcmp(users[i].username, username) == 0 &&
@@ -315,10 +255,13 @@ int login(UserType requiredType) {
                 if (requiredType == STUDENT && !findStudentByUsername(username)) {
                     printf("账号没有对应学生档案，请联系管理员。\n"); return 0;
                 }
+                if(requiredType==TEACHER&&!validPersonName(userDisplayNames[i])){printf("教师姓名待完善，请联系管理员。\n");return 0;}
                 currentUser = users[i];
                 if (requiredType == ADMIN && verifyPassword("admin", currentUser.password)) {
                     printf("首次登录必须修改默认密码（至少6个字节）。\n");
-                    do { changePassword(); } while (verifyPassword("admin", currentUser.password));
+                    do { changePassword();
+                        if(inputFinished()||verifyPassword("admin",currentUser.password)) { printf("默认密码尚未修改，返回登录入口。\n"); return 0; }
+                    } while (verifyPassword("admin", currentUser.password));
                 }
                 auditLogin(username, 1);
                 return 1;

@@ -9,10 +9,10 @@
 
 /* Streaming RFC-style fields, including escaped quotes and embedded CR/LF.
    Return -1 for a malformed record, 0 for EOF, 1 for a record. */
-static int readCSV(FILE *f, char fields[3][512], int *physical)
+static int readCSV(FILE *f, char fields[4][512], int *physical, int *columns)
 {
     int field = 0, len = 0, state = 0, bad = 0, any = 0, ch;
-    memset(fields, 0, 3 * 512);
+    memset(fields, 0, 4 * 512);
     while ((ch = fgetc(f)) != EOF)
     {
         any = 1;
@@ -33,7 +33,7 @@ static int readCSV(FILE *f, char fields[3][512], int *physical)
                 state = 3;
             else
             {
-                if (field < 3 && len < 511)
+                if (field < 4 && len < 511)
                     fields[field][len++] = (char)ch;
                 else
                     bad = 1;
@@ -42,7 +42,7 @@ static int readCSV(FILE *f, char fields[3][512], int *physical)
         }
         if (state == 3 && ch == '"')
         {
-            if (field < 3 && len < 511)
+            if (field < 4 && len < 511)
                 fields[field][len++] = '"';
             else
                 bad = 1;
@@ -51,13 +51,14 @@ static int readCSV(FILE *f, char fields[3][512], int *physical)
         }
         if (ch == ',' || ch == '\n')
         {
-            if (field < 3)
+            if (field < 4)
                 fields[field][len] = 0;
             if (ch == '\n')
             {
                 if (!bad && field == 0 && len == 0 && state == 0)
                     return 2;
-                return !bad && field == 2 ? 1 : -1;
+                *columns = field + 1;
+                return !bad && (field == 2 || field == 3) ? 1 : -1;
             }
             field++;
             len = 0;
@@ -78,21 +79,21 @@ static int readCSV(FILE *f, char fields[3][512], int *physical)
             continue;
         }
         state = 1;
-        if (field < 3 && len < 511)
+        if (field < 4 && len < 511)
             fields[field][len++] = (char)ch;
         else
             bad = 1;
     }
     if (!any)
         return 0;
-    if (field < 3)
+    if (field < 4)
         fields[field][len] = 0;
-    return !bad && state != 2 && field == 2 ? 1 : -1;
+    *columns = field + 1;
+    return !bad && state != 2 && (field == 2 || field == 3) ? 1 : -1;
 }
 static FILE *inputPath(char *path, size_t n, const wchar_t *mode)
 {
-    safeReadString(path, n, "CSV路径 (0取消，不加外层引号): ");
-    if (!strcmp(path, "0"))
+    if (safeReadString(path, n, "CSV路径 (:q取消，不加外层引号): ") != INPUT_OK)
         return NULL;
     wchar_t wide[512];
     if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, 512))
@@ -143,12 +144,12 @@ void csvImport(void)
     }
     memcpy(staged, students, sizeof(students));
     int physical = 1, records = 0, errors = 0, imported = 0, seen[MAX_STUDENTS] = {0};
-    char fields[3][512];
-    int rc;
+    char fields[4][512];
+    int rc, columns = 0, expectedColumns = 0;
     while (1)
     {
         int line = physical;
-        rc = readCSV(f, fields, &physical);
+        rc = readCSV(f, fields, &physical, &columns);
         if (!rc)
             break;
         if (rc == 2)
@@ -157,9 +158,19 @@ void csvImport(void)
         const char *reason = NULL;
         if (rc < 0)
             reason = "CSV字段数、长度或引号格式错误";
+        if (!reason)
+        {
+            if (!expectedColumns)
+                expectedColumns = columns;
+            if (columns != expectedColumns)
+                reason = "列数与表头或首条数据不一致";
+        }
+        int courseColumn = columns == 4 ? 2 : 1, scoreColumn = columns == 4 ? 3 : 2;
         if (!reason && records == 1 &&
-            ((!strcmp(fields[0], "stuNum") && !strcmp(fields[1], "course") && !strcmp(fields[2], "score")) ||
-             (!strcmp(fields[0], "学号") && !strcmp(fields[1], "科目") && !strcmp(fields[2], "成绩"))))
+            ((!strcmp(fields[0], "stuNum") && !strcmp(fields[courseColumn], "course") &&
+              !strcmp(fields[scoreColumn], "score") && (columns == 3 || !strcmp(fields[1], "name"))) ||
+             (!strcmp(fields[0], "学号") && !strcmp(fields[courseColumn], "科目") &&
+              !strcmp(fields[scoreColumn], "成绩") && (columns == 3 || !strcmp(fields[1], "姓名")))))
             continue;
         int i = -1, j = -1;
         float v = 0;
@@ -167,23 +178,27 @@ void csvImport(void)
         if (!reason)
         {
             errno = 0;
-            v = strtof(fields[2], &end);
-            int parsed = end != fields[2];
+            v = strtof(fields[scoreColumn], &end);
+            int parsed = end != fields[scoreColumn];
             while (end && isspace((unsigned char)*end))
                 end++;
             if (!parsed || *end || errno || !isfinite(v) || v < 0 || v > 100)
                 reason = "成绩必须为0到100的有限数字";
+            else if (!validStudentId(fields[0]))
+                reason = "学号必须为数字字符串";
             else if ((i = findStudentIndex(fields[0])) < 0)
                 reason = "学号不存在";
+            else if (columns == 4 && strcmp(fields[1], students[i].name))
+                reason = "姓名与学号不匹配";
             else if (studentClass(fields[0]) != c)
                 reason = "学生不属于所选班级";
-            else if (strcmp(fields[1], currentUser.teachCourse))
+            else if (strcmp(fields[courseColumn], currentUser.teachCourse))
                 reason = "科目不匹配";
             else if (!hasTeacherAccess(&students[i]))
                 reason = "无授课权限";
             else if (seen[i])
                 reason = "文件内重复成绩";
-            else if ((j = courseIndex(&staged[i], fields[1])) >= 0)
+            else if ((j = courseIndex(&staged[i], fields[courseColumn])) >= 0)
                 reason = "该课程已有成绩";
             else if (staged[i].courseCount >= MAX_COURSES)
                 reason = "课程数量已达上限";
@@ -196,7 +211,7 @@ void csvImport(void)
         }
         seen[i] = 1;
         j = staged[i].courseCount++;
-        strcpy(staged[i].courses[j].course, fields[1]);
+        strcpy(staged[i].courses[j].course, fields[courseColumn]);
         staged[i].courses[j].score = v;
         imported++;
     }
@@ -209,6 +224,11 @@ void csvImport(void)
     if (errors)
     {
         printf("共%d处错误，本次未导入任何成绩。\n", errors);
+        free(staged);
+        return;
+    }
+    if (inputFinished())
+    {
         free(staged);
         return;
     }
@@ -230,7 +250,7 @@ void csvImport(void)
                      (double)staged[i].courses[j].score);
         }
     tableEnd();
-    if (!safeReadInt("1确认导入 / 0取消: ", 0, 1))
+    if (!confirmAction("1确认导入 / 0取消: "))
     {
         free(staged);
         printf("已取消导入。\n");
@@ -258,7 +278,7 @@ static void writeField(FILE *f, const char *text)
 }
 void csvExport(void)
 {
-    if (currentUser.type != TEACHER)
+    if (currentUser.type != TEACHER && currentUser.type != ADMIN)
     {
         printf("无权导出。\n");
         return;
@@ -266,9 +286,11 @@ void csvExport(void)
     int c = selectClass();
     if (c < 0)
         return;
+    char course[30];
+    if (!selectCourse(course, sizeof(course)))
+        return;
     char path[512];
-    safeReadString(path, sizeof(path), "导出CSV新文件路径 (0取消): ");
-    if (!strcmp(path, "0"))
+    if (safeReadString(path, sizeof(path), "导出CSV新文件路径 (:q取消): ") != INPUT_OK)
         return;
     wchar_t wide[512];
     if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, 512))
@@ -294,12 +316,12 @@ void csvExport(void)
     for (int i = 0; i < studentCount; i++)
         if (studentClass(students[i].stuNum) == c && hasTeacherAccess(&students[i]))
         {
-            int j = courseIndex(&students[i], currentUser.teachCourse);
+            int j = courseIndex(&students[i], course);
             if (j < 0)
                 continue;
             writeField(f, students[i].stuNum);
             fputc(',', f);
-            writeField(f, currentUser.teachCourse);
+            writeField(f, course);
             fprintf(f, ",%.9g\r\n", students[i].courses[j].score);
             n++;
         }
@@ -314,7 +336,7 @@ void csvExport(void)
         return;
     }
     char detail[256];
-    snprintf(detail, sizeof(detail), "class=%s course=%s rows=%d", schoolClasses[c].name, currentUser.teachCourse, n);
+    snprintf(detail, sizeof(detail), "class=%s course=%s rows=%d", schoolClasses[c].name, course, n);
     auditEvent("csv-export", detail);
     if (saveAll())
         printf("成功导出 %d 条成绩。\n", n);

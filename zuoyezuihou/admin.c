@@ -1,336 +1,256 @@
 #include "admin.h"
 #include "maintenance.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-// 检查学号是否已存在
-static int studentIdExists(const char* stuNum) {
-    for (int i = 0; i < studentCount; i++) {
-        if (strcmp(students[i].stuNum, stuNum) == 0) {
-            return 1; // 学号已存在
-        }
-    }
-    return 0; // 学号不存在
-}
-
-// 添加学生
-void addStudent() {
-    if (studentCount >= MAX_STUDENTS || userCount >= MAX_USERS) {
-        printf("学生或用户数量已达上限！\n"); return;
-    }
-    Student newStudent = { 0 };
-    newStudent.teacherCount = 0;  // 初始化教师数量
-
-    printf("\n[添加学生]\n");
-
-    // 读取并验证学号唯一性
-    while (1) {
-        safeReadString(newStudent.stuNum, sizeof(newStudent.stuNum), "学号: ");
-
-        if (studentIdExists(newStudent.stuNum) || userExists(newStudent.stuNum)) {
-            printf("错误：该学号已存在！请重新输入。\n");
-        }
-        else {
-            break; // 学号唯一，继续添加
-        }
-    }
-
-    safeReadString(newStudent.name, sizeof(newStudent.name), "姓名: ");
-
-    // 显示可选教师列表
-    printf("\n可选教师列表:\n");
-    const int widths[] = {6, 20, 20, 24};
-    const char* headers[] = {"序号", "登录名", "显示姓名", "任教科目"};
-    tableStart(4, widths, headers);
-    int availableTeachers[MAX_USERS];
-    int availableTeacherCount = 0;
-
-    for (int i = 0; i < userCount; i++) {
-        if (users[i].type == TEACHER) {
-            availableTeachers[availableTeacherCount++] = i;
-            tableRow("dsss",
-                availableTeacherCount, users[i].username, displayName(users[i].username), users[i].teachCourse);
-        }
-    }
-
-    tableEnd();
-    if (availableTeacherCount == 0) {
-        printf("暂无可用教师！\n");
+void addTeacher(void)
+{
+    if (currentUser.type != ADMIN || userCount >= MAX_USERS)
+    {
+        printf("无权限或用户数量已达上限。\n");
         return;
     }
-
-    // 为学生分配教师
-    printf("\n请为学生分配教师（最多 %d 位，输入0结束）:\n", MAX_TEACHERS_PER_STUDENT);
-
-    while (1) {
-        if (newStudent.teacherCount >= MAX_TEACHERS_PER_STUDENT) {
-            printf("已达到教师数量上限！\n");
+    User teacher = {0};
+    char name[60], password[20];
+    teacher.type = TEACHER;
+    for (;;)
+    {
+        if (readTeacherId(teacher.username, 20, "教师工号 (:q取消): ") != INPUT_OK)
+            return;
+        if (!userExists(teacher.username))
             break;
-        }
-
-        int choice = safeReadInt("选择教师序号 (0结束): ", 0, availableTeacherCount);
-
-        if (choice == 0) break; // 结束选择
-
-        int teacherIndex = availableTeachers[choice - 1];
-
-        // 检查是否已选择该教师
-        int alreadySelected = 0;
-        for (int i = 0; i < newStudent.teacherCount; i++) {
-            if (strcmp(users[teacherIndex].username, newStudent.teachers[i]) == 0) {
-                alreadySelected = 1;
-                break;
-            }
-        }
-
-        if (alreadySelected) {
-            printf("该教师已选择！\n");
-        }
-        else {
-            // 添加教师到学生记录
-            strcpy(newStudent.teachers[newStudent.teacherCount++], users[teacherIndex].username);
-            printf("已选择教师: %s (科目: %s)\n",
-                users[teacherIndex].username, users[teacherIndex].teachCourse);
-        }
+        printf("该工号已存在，请重新输入。\n");
     }
-
-    if (newStudent.teacherCount == 0) {
-        printf("至少需要选择一位教师！\n");
+    if (readPersonName(name, sizeof(name), "教师姓名 (:q取消): ") != INPUT_OK)
         return;
+    if (safeReadString(teacher.teachCourse, 30, "任教科目 (:q取消): ") != INPUT_OK)
+        return;
+    for (;;)
+    {
+        if (safeReadString(password, sizeof(password), "初始密码（至少6字节，:q取消）: ") != INPUT_OK)
+            return;
+        if (strlen(password) >= 6)
+            break;
+        printf("密码至少6字节。\n");
     }
-
-    // 初始化其他学生信息
-    newStudent.courseCount = 0;
-    newStudent.average = 0;
-
-    // 添加学生到系统
-    if (studentCount < MAX_STUDENTS) {
-        students[studentCount++] = newStudent;
-
-
-        // 为学生创建默认用户账号（用户名=学号，密码=学号）
-        User studentUser = { 0 };
-        strcpy(studentUser.username, newStudent.stuNum);
-        hashPassword(newStudent.stuNum, studentUser.password);
-        studentUser.type = STUDENT;
-
-        if (userCount < MAX_USERS) {
-            userDisplayNames[userCount][0]=0;
-            users[userCount++] = studentUser;
-        }
-        else {
-            printf("警告：用户数量已达上限，未创建学生账号！\n");
-        }
-
-        auditEvent("student-create", newStudent.stuNum);
-        if (saveAll()) printf("学生添加成功！\n"); // 保存所有数据
-    }
-    else {
-        printf("错误：学生数量已达上限！\n");
-    }
+    printf("教师预览 工号: %s 姓名: %s 科目: %s\n", teacher.username, name, teacher.teachCourse);
+    if (!confirmAction("1确认添加 / 0取消: "))
+        return;
+    hashPassword(password, teacher.password);
+    if (createTeacher(&teacher, name) == RESULT_OK)
+        printf("教师添加成功！\n");
 }
-
-// 添加教师
-void addTeacher() {
-    if (userCount >= MAX_USERS) { printf("用户数量已达上限！\n"); return; }
-    User newTeacher = { 0 };
-    newTeacher.type = TEACHER;
-
-    printf("\n[添加教师]\n");
-
-    // 读取并验证用户名唯一性
-    while (1) {
-        safeReadString(newTeacher.username, sizeof(newTeacher.username), "教师登录名（稳定标识）: ");
-
-        if (userExists(newTeacher.username)) {
-            printf("错误：该用户名已存在！请重新输入。\n");
-        }
-        else {
-            break; // 用户名唯一，继续添加
-        }
+void addStudent(void)
+{
+    if (currentUser.type != ADMIN || studentCount >= MAX_STUDENTS || userCount >= MAX_USERS)
+    {
+        printf("无权限或学生/用户数量已达上限。\n");
+        return;
     }
-
-    char initialPassword[20];
-    safeReadString(initialPassword, sizeof(initialPassword), "初始密码: ");
-    hashPassword(initialPassword, newTeacher.password);
-    safeReadString(newTeacher.teachCourse, sizeof(newTeacher.teachCourse), "授课科目: ");
-
-    // 添加教师到系统
-    if (userCount < MAX_USERS) {
-        userDisplayNames[userCount][0]=0;
-        users[userCount++] = newTeacher;
-
-        auditEvent("teacher-create", newTeacher.username);
-        if (saveAll()) printf("教师添加成功！\n"); // 保存所有数据
+    Student st = {0};
+    for (;;)
+    {
+        if (readStudentId(st.stuNum, 20, "学生学号 (:q取消): ") != INPUT_OK)
+            return;
+        if (!userExists(st.stuNum) && findStudentIndex(st.stuNum) < 0)
+            break;
+        printf("该学号已存在，请重新输入。\n");
     }
-    else {
-        printf("错误：用户数量已达上限！\n");
+    if (readPersonName(st.name, 20, "学生姓名 (:q取消): ") != INPUT_OK)
+        return;
+    int c = selectClass();
+    if (c < 0)
+        return;
+    if (classInactive[c])
+    {
+        printf("班级已停用，不能分班。\n");
+        return;
     }
+    st.teacherCount = selectTeachers(st.teachers);
+    if (st.teacherCount <= 0)
+        return;
+    printf("学生预览 学号: %s 姓名: %s 班级: %s 教师数: %d\n", st.stuNum, st.name, schoolClasses[c].name,
+           st.teacherCount);
+    if (!confirmAction("1确认添加 / 0取消: "))
+        return;
+    if (createStudent(&st, c) == RESULT_OK)
+        printf("学生添加成功！\n");
 }
-
-// 删除学生
-void deleteStudent() {
-    char stuNum[STU_NUM_LEN] = { 0 };
-    printf("\n[删除学生]\n");
-    safeReadString(stuNum, sizeof(stuNum), "请输入要删除的学生学号: ");
-
-    int index = findStudentIndex(stuNum);
-    if (index == -1) {
-        printf("错误：未找到该学生！\n");
+void deleteStudent(void)
+{
+    if (currentUser.type != ADMIN)
+        return;
+    char id[20], confirmation[20];
+    if (readStudentId(id, 20, "删除学生学号 (:q取消): ") != INPUT_OK)
+        return;
+    int s = findStudentIndex(id);
+    if (s < 0)
+    {
+        printf("学生不存在。\n");
         return;
     }
-
-    // 确认删除
-    char confirm[10] = { 0 };
-    printf("确定要删除学生 %s (学号: %s) 吗？(yes/no): ",
-        students[index].name, students[index].stuNum);
-    safeReadString(confirm, sizeof(confirm), "");
-
-    if (strcmp(confirm, "yes") != 0) {
-        printf("操作已取消！\n");
+    printf("将删除 %s %s 及关联账号和班级归属。\n", id, students[s].name);
+    if (safeReadString(confirmation, 20, "输入 yes 确认，其他文字取消: ") != INPUT_OK || strcmp(confirmation, "yes"))
         return;
-    }
-
-    char deletedId[STU_NUM_LEN];
-    strcpy(deletedId, students[index].stuNum);
-    removeClassMember(deletedId);
-    // 从数组中移除学生
-    for (int i = index; i < studentCount - 1; i++) {
+    removeClassMember(id);
+    for (int i = s; i < studentCount - 1; i++)
         students[i] = students[i + 1];
-    }
     studentCount--;
-
-    // 同时删除对应的用户账号
-    for (int i = 0; i < userCount; i++) {
-        if (users[i].type == STUDENT && strcmp(users[i].username, deletedId) == 0) {
-            for (int j = i; j < userCount - 1; j++) {
+    for (int u = 0; u < userCount; u++)
+        if (users[u].type == STUDENT && !strcmp(users[u].username, id))
+        {
+            for (int j = u; j < userCount - 1; j++)
+            {
                 users[j] = users[j + 1];
                 strcpy(userDisplayNames[j], userDisplayNames[j + 1]);
             }
             userCount--;
             break;
         }
-    }
-
-    auditEvent("student-delete", deletedId);
-    if (saveAll()) printf("学生删除成功！\n"); // 保存所有数据
+    auditEvent("student-delete", id);
+    if (saveAll())
+        printf("学生删除成功！\n");
 }
-
-// 查看所有用户
-void viewAllUsers() {
-    printf("\n[所有用户]\n");
-    const int widths[] = {10, 20, 20, 24, 10};
-    const char* headers[] = {"类型", "用户名", "显示姓名", "任教科目", "密码"};
-    tableStart(5, widths, headers);
-    for (int i = 0; i < userCount; ++i) {
-        const char* type = users[i].type == ADMIN ? "管理员" : users[i].type == TEACHER ? "教师" : "学生";
-        tableRow("sssss", type, users[i].username, displayName(users[i].username), users[i].type == TEACHER ? users[i].teachCourse : "--", "******");
+void viewAllUsers(void)
+{
+    const int w[] = {10, 20, 20, 24, 10};
+    const char *h[] = {"类型", "账号/主码", "姓名", "科目", "密码"};
+    tableStart(5, w, h);
+    for (int i = 0; i < userCount; i++)
+    {
+        tableRow("sssss",
+                 users[i].type == ADMIN     ? "管理员"
+                 : users[i].type == TEACHER ? "教师"
+                                            : "学生",
+                 users[i].username, displayName(users[i].username),
+                 users[i].type == TEACHER ? users[i].teachCourse : "--", "******");
+        if ((i + 1) % 10 == 0 && i + 1 < userCount)
+        {
+            tableEnd();
+            if (!pageNext(i + 1))
+                return;
+            tableStart(5, w, h);
+        }
     }
     tableEnd();
 }
-
-// 修改密码
-void changePassword() {
-    char oldPass[20] = { 0 };
-    char newPass[20] = { 0 };
-    char confirmPass[20] = { 0 };
-
-    printf("\n[修改密码]\n");
-    safeReadString(oldPass, sizeof(oldPass), "请输入当前密码: ");
-
-    // 验证当前密码
-    if (!verifyPassword(oldPass, currentUser.password)) {
-        printf("错误：当前密码不正确！\n");
+void changePassword(void)
+{
+    char old[20], pass[20], again[20];
+    if (safeReadString(old, 20, "当前密码 (:q取消): ") != INPUT_OK)
+        return;
+    if (!verifyPassword(old, currentUser.password))
+    {
+        printf("当前密码不正确。\n");
         return;
     }
-
-    // 获取并确认新密码
-    while (1) {
-        safeReadString(newPass, sizeof(newPass), "请输入新密码: ");
-        safeReadString(confirmPass, sizeof(confirmPass), "请再次输入新密码: ");
-
-        if (strlen(newPass) < 6) { printf("新密码至少需要6个字节！\n"); continue; }
-        if (strcmp(newPass, confirmPass) != 0) {
-            printf("两次输入的密码不一致！请重新输入。\n");
+    for (;;)
+    {
+        if (safeReadString(pass, 20, "新密码 (:q取消): ") != INPUT_OK ||
+            safeReadString(again, 20, "再次输入新密码 (:q取消): ") != INPUT_OK)
+            return;
+        if (strlen(pass) < 6)
+        {
+            printf("新密码至少6个字节。\n");
+            continue;
         }
-        else {
-            break;
+        if (strcmp(pass, again))
+        {
+            printf("两次输入不一致。\n");
+            continue;
         }
+        break;
     }
-
-    // 更新密码
-    hashPassword(newPass, currentUser.password);
-
-    // 在用户数组中更新密码
-    for (int i = 0; i < userCount; i++) {
-        if (strcmp(users[i].username, currentUser.username) == 0) {
-            strcpy(users[i].password, currentUser.password);
-            break;
+    for (int i = 0; i < userCount; i++)
+        if (!strcmp(users[i].username, currentUser.username))
+        {
+            hashPassword(pass, users[i].password);
+            auditEvent("password-change", currentUser.username);
+            if (saveAll())
+            {
+                currentUser = users[i];
+                printf("密码修改成功！\n");
+            }
+            return;
         }
-    }
-
-    auditEvent("password-change", currentUser.username);
-    if (saveAll()) printf("密码修改成功！\n"); // 保存所有数据
 }
-
-// 清空所有用户
-void clearAllUsers() {
-    char confirm[20] = { 0 };
-    printf("\n警告：此操作将删除所有用户数据（学生、教师），仅保留默认管理员账号！\n");
-    safeReadString(confirm, sizeof(confirm), "确认执行此操作？(输入 'confirm' 确认): ");
-
-    if (strcmp(confirm, "confirm") != 0) {
-        printf("操作已取消！\n");
+void clearAllUsers(void)
+{
+    if (currentUser.type != ADMIN)
         return;
-    }
-
-    // 清空用户数组，保留默认管理员
-    memset(userDisplayNames,0,sizeof(userDisplayNames));
+    char text[20];
+    printf("危险操作：删除全部学生和教师，仅保留当前管理员及班级定义。\n");
+    if (safeReadString(text, 20, "输入 confirm 确认 (:q取消): ") != INPUT_OK || strcmp(text, "confirm"))
+        return;
+    users[0] = currentUser;
     userCount = 1;
-    strcpy(users[0].username, "admin");
-    strcpy(users[0].password, currentUser.password);
-    users[0].type = ADMIN;
-
-    // 清空学生数组
     studentCount = 0;
-    for (int i = 0; i < classCount; ++i) schoolClasses[i].count = 0;
-
+    demoSeedVersion = 0;
+    memset(userDisplayNames, 0, sizeof(userDisplayNames));
+    for (int i = 0; i < classCount; i++)
+        schoolClasses[i].count = 0;
     auditEvent("users-clear", "all students and teachers");
-    if (saveAll()) printf("所有用户数据已清空！\n"); // 保存所有数据
+    if (saveAll())
+        printf("所有用户数据已清空！\n");
 }
-
-// 管理员菜单
-void adminMenu(void) {
-    int choice;
-
-    while (1) {
-        clearScreen();
-        printf("\n[管理员菜单] - 当前用户: %s\n", currentUser.username);
-        printf("1. 添加学生\n2. 添加教师\n3. 删除学生\n");
-        printf("4. 查看所有用户\n5. 修改密码\n6. 清空所有用户\n");
-        printf("7. 返回\n8. 添加班级\n9. 查看班级\n10. 查看所有学生\n11. 查看所有成绩\n12. 班级管理\n13. 编辑档案\n14. 搜索学生\n15. 操作日志\n选择: ");
-
-        choice = safeReadInt("", 1, 15);
-
-        switch (choice) {
-        case 1: addStudent(); break;
-        case 2: addTeacher(); break;
-        case 3: deleteStudent(); break;
-        case 4: viewAllUsers(); break;
-        case 5: changePassword(); break;
-        case 6: clearAllUsers(); break;
-        case 7: return;
-        case 8: addClass(); break;
-        case 9: listClasses(); break;
-        case 10: listStudentsAndScores(0); break;
-        case 11: listStudentsAndScores(1); break;
-        case 12: classManagement(); break;
-        case 13: editRecords(); break;
-        case 14: searchRecords(); break;
-        case 15: showAudit(); break;
-        }
-
-        pauseScreen();
-    }
+static void listStudents(void)
+{
+    filteredList(0);
+}
+static void studentManagement(void)
+{
+    const MenuItem m[] = {{"添加学生", addStudent},    {"查看学生列表", listStudents}, {"修改学生信息", editStudent},
+                          {"删除学生", deleteStudent}, {"搜索学生", searchRecords},    {"返回上一级", NULL}};
+    runMenu("管理员 / 基础信息管理 / 学生管理", m, 6);
+}
+static void teacherManagement(void)
+{
+    const MenuItem m[] = {{"添加教师", addTeacher},
+                          {"查看教师列表", teacherList},
+                          {"修改教师姓名", editTeacher},
+                          {"维护学生授课关系", editTeaching},
+                          {"返回上一级", NULL}};
+    runMenu("管理员 / 基础信息管理 / 教师管理", m, 5);
+}
+static void basicManagement(void)
+{
+    const MenuItem m[] = {{"学生管理", studentManagement},
+                          {"教师管理", teacherManagement},
+                          {"班级管理", classManagement},
+                          {"返回上一级", NULL}};
+    runMenu("管理员 / 基础信息管理", m, 4);
+}
+static void gradeManagement(void)
+{
+    const MenuItem m[] = {{"按班级/科目查看成绩", adminScoreQuery},
+                          {"班级成绩统计", classStatistics},
+                          {"导出CSV", csvExport},
+                          {"返回上一级", NULL}};
+    runMenu("管理员 / 成绩管理", m, 4);
+}
+static void queries(void)
+{
+    const MenuItem m[] = {{"学生综合信息", studentOverview},
+                          {"教师授课信息", teacherOverview},
+                          {"班级概况", classOverview},
+                          {"返回上一级", NULL}};
+    runMenu("管理员 / 综合查询", m, 4);
+}
+static void dangerous(void)
+{
+    const MenuItem m[] = {{"清空用户与学生数据", clearAllUsers}, {"返回上一级", NULL}};
+    runMenu("管理员 / 系统管理 / 危险操作", m, 2);
+}
+static void settings(void)
+{
+    const MenuItem m[] = {{"修改本人密码", changePassword}, {"查看用户账号", viewAllUsers}, {"查看操作日志", showAudit},
+                          {"补充示例数据", seedDemoMenu},   {"危险操作", dangerous},        {"返回上一级", NULL}};
+    runMenu("管理员 / 系统管理", m, 6);
+}
+void adminMenu(void)
+{
+    if (currentUser.type != ADMIN)
+        return;
+    const MenuItem m[] = {{"系统首页", systemHome},      {"基础信息管理", basicManagement},
+                          {"成绩管理", gradeManagement}, {"综合查询", queries},
+                          {"系统管理", settings},        {"退出登录", NULL}};
+    runMenu("学生成绩管理系统 / 管理员菜单", m, 6);
 }

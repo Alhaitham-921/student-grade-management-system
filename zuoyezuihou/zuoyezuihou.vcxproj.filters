@@ -30,6 +30,8 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="input.c"><Filter>源文件</Filter></ClCompile>
+    <ClCompile Include="initialization.c"><Filter>源文件</Filter></ClCompile>
     <ClCompile Include="storage.c"><Filter>源文件</Filter></ClCompile>
     <ClCompile Include="classes.c"><Filter>源文件</Filter></ClCompile>
     <ClCompile Include="records.c"><Filter>源文件</Filter></ClCompile>

@@ -72,8 +72,11 @@ void pauseScreen(void);
 void loadAll();
 int saveAll(void);
 int login(UserType requiredType);
-void safeReadString(char* buffer, size_t size, const char* prompt);
+typedef enum { INPUT_END = -1, INPUT_CANCEL = 0, INPUT_OK = 1 } InputStatus;
+InputStatus safeReadString(char* buffer, size_t size, const char* prompt);
+/* -1 means cancelled or input ended; callers must not use it as an index. */
 int safeReadInt(const char* prompt, int min, int max);
+/* NAN means cancelled or input ended. */
 float safeReadFloat(const char* prompt, float min, float max);
 int userExists(const char* username);
 int findStudentIndex(const char* stuNum);

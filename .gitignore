@@ -52,3 +52,6 @@ tmp*/
 .sgms/
 .sgms.lock
 legacy-backup-*/
+
+# Explicit backups made before local dataset initialization
+/local-backups/

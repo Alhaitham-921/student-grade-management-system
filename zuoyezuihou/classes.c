@@ -37,20 +37,23 @@ int selectClass(void)
     listClasses();
     if (!classCount)
         return -1;
-    return safeReadInt("选择班级序号 (0取消): ", 0, classCount) - 1;
+    printf("%d. 返回上一级\n", classCount + 1);
+    int choice = safeReadInt("选择班级序号: ", 1, classCount + 1);
+    return choice < 1 || choice == classCount + 1 ? -1 : choice - 1;
 }
-static void readName(char *name, size_t size)
+static int readName(char *name, size_t size)
 {
     for (;;)
     {
-        safeReadString(name, size, "班级名称: ");
+        if (safeReadString(name, size, "班级名称 (:q取消): ") != INPUT_OK)
+            return 0;
         size_t n = strlen(name);
         if (name[0] == ' ' || name[n - 1] == ' ')
         {
             printf("班级名称首尾不能有空格。\n");
             continue;
         }
-        break;
+        return 1;
     }
 }
 void addClass(void)
@@ -66,7 +69,8 @@ void addClass(void)
         return;
     }
     char name[CLASS_NAME_LEN];
-    readName(name, sizeof(name));
+    if (!readName(name, sizeof(name)))
+        return;
     for (int i = 0; i < classCount; i++)
         if (!strcmp(name, schoolClasses[i].name))
         {
@@ -101,8 +105,7 @@ OperationResult assignClassMember(const char *id, int c)
 static void assignClass(void)
 {
     char id[20];
-    safeReadString(id, sizeof(id), "学号 (0取消): ");
-    if (!strcmp(id, "0"))
+    if (readStudentId(id, sizeof(id), "学号 (:q取消): ") != INPUT_OK)
         return;
     int s = findStudentIndex(id);
     if (s < 0)
@@ -155,57 +158,43 @@ static void members(void)
     tableEnd();
     printf("班级人数: %d\n", schoolClasses[c].count);
 }
+static void renameClass(void)
+{
+    int c = selectClass();
+    if (c < 0)
+        return;
+    char name[CLASS_NAME_LEN];
+    if (!readName(name, sizeof(name)))
+        return;
+    for (int i = 0; i < classCount; i++)
+        if (i != c && !strcmp(name, schoolClasses[i].name))
+        {
+            printf("班级已存在！\n");
+            return;
+        }
+    char detail[160];
+    snprintf(detail, sizeof(detail), "before=%s after=%s", schoolClasses[c].name, name);
+    strcpy(schoolClasses[c].name, name);
+    auditEvent("class-rename", detail);
+    if (saveAll())
+        printf("班级更新成功。\n");
+}
+static void toggleClass(void)
+{
+    int c = selectClass();
+    if (c < 0)
+        return;
+    classInactive[c] = !classInactive[c];
+    auditEvent(classInactive[c] ? "class-disable" : "class-enable", schoolClasses[c].name);
+    if (saveAll())
+        printf("班级更新成功。\n");
+}
 void classManagement(void)
 {
     if (currentUser.type != ADMIN)
-    {
-        printf("无权管理班级。\n");
         return;
-    }
-    for (;;)
-    {
-        printf("\n[班级管理]\n1. 创建\n2. 重命名\n3. 查看成员\n4. 分班/转班\n5. 停用/启用\n6. 列表\n0. 返回\n");
-        int op = safeReadInt("选择: ", 0, 6);
-        if (!op)
-            return;
-        if (op == 1)
-            addClass();
-        if (op == 3)
-            members();
-        if (op == 4)
-            assignClass();
-        if (op == 6)
-            listClasses();
-        if (op == 2 || op == 5)
-        {
-            int c = selectClass();
-            if (c < 0)
-                continue;
-            if (op == 2)
-            {
-                char name[CLASS_NAME_LEN];
-                readName(name, sizeof(name));
-                int duplicate = 0;
-                for (int i = 0; i < classCount; i++)
-                    if (i != c && !strcmp(name, schoolClasses[i].name))
-                        duplicate = 1;
-                if (duplicate)
-                {
-                    printf("班级已存在！\n");
-                    continue;
-                }
-                char detail[160];
-                snprintf(detail, sizeof(detail), "before=%s after=%s", schoolClasses[c].name, name);
-                strcpy(schoolClasses[c].name, name);
-                auditEvent("class-rename", detail);
-            }
-            else
-            {
-                classInactive[c] = !classInactive[c];
-                auditEvent(classInactive[c] ? "class-disable" : "class-enable", schoolClasses[c].name);
-            }
-            if (saveAll())
-                printf("班级更新成功。\n");
-        }
-    }
+    const MenuItem m[] = {{"创建班级", addClass},  {"查看班级列表", listClasses}, {"查看成员", members},
+                          {"重命名", renameClass}, {"分班/转班", assignClass},    {"停用/启用", toggleClass},
+                          {"返回上一级", NULL}};
+    runMenu("管理员 / 基础信息管理 / 班级管理", m, 7);
 }

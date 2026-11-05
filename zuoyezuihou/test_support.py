@@ -16,13 +16,24 @@ def run(d, seq, *, env=None, expected=0, exe=None):
     return out
 FIRST=['1','admin','admin','admin','abcdef','abcdef']
 ADMIN=['1','admin','abcdef']
-TEACHER=['2','T','teacher']
-def assign(id,c):return ['12','4',id,str(c),'0']
+TEACHER=['2','T0001','teacher']
+LOGOUT=['6','4']
+def add_class(name):return ['2','3','1',name,'7','4']
+def add_teacher(id='T0001',name='张三',course='Math',password='teacher'):
+    return ['2','2','1',id,name,course,password,'1','5','4']
+def add_student(id,name='Same',c=1,teachers=('1',)):
+    return ['2','1','1',id,name,str(c),*teachers,'0','1','6','4']
+def assign(id,c):return ['2','3','5',id,str(c),'7','4']
+def rename_class(c,name):return ['2','3','4',str(c),name,'7','4']
+def toggle_class(c):return ['2','3','6',str(c),'7','4']
+def edit_teacher(id,name):return ['2','2','3',id,name,'1','5','4']
+def edit_student(id,name):return ['2','1','3',id,'1',name,'1','6','4']
+def edit_teaching(id,teachers):return ['2','2','4',id,*map(str,teachers),'0','1','5','4']
+def delete_student(id):return ['2','1','4',id,'yes','6','4']
 def seed(d, *, course='Math', count=3):
-    seq=FIRST+['8','A','8','B','2','T','teacher',course,'2','Other','secret','English']
-    for i in range(1,count+1):seq+=['1',f'{i:03}','Same' if i<3 else 'Alice王','1','0']
-    for i in range(1,count+1):seq+=assign(f'{i:03}',1 if i<3 else 2)
-    return run(d,seq+['7','4'])
+    seq=FIRST+add_class('A')+add_class('B')+add_teacher(course=course)+add_teacher('T0002','王芳','English','secret')
+    for i in range(1,count+1):seq+=add_student(f'{i:03}','Same' if i<3 else 'Alice王',1 if i<3 else 2)
+    return run(d,seq+LOGOUT)
 def marker(d):return (d/'.sgms/current.dat').read_bytes()
 def active(d):
     raw=marker(d); n=struct.unpack_from('<I',raw,12)[0]
@@ -46,9 +57,9 @@ def legacy_hashed(d):
         digest=hashlib.pbkdf2_hmac('sha256',password.encode(),salt,100000)
         encoded='p1$'+salt.hex()+digest.hex()
         return text(login,20)+text(encoded,128)+struct.pack('<i',role)+text(course,30)+b'\0'*2
-    records=user('admin','abcdef',0)+user('T','teacher',1,'Math')+user('001','001',2)
+    records=user('admin','abcdef',0)+user('111','teacher',1,'Math')+user('001','001',2)
     (d/'users.dat').write_bytes(struct.pack('<i',3)+records)
-    st=text('001',20)+text('中文名',20)+b'\0'*(36*10)+text('T',20)+b'\0'*(20*9)+struct.pack('<iif',1,0,0)
+    st=text('001',20)+text('中文名',20)+b'\0'*(36*10)+text('111',20)+b'\0'*(20*9)+struct.pack('<iif',1,0,0)
     (d/'students.dat').write_bytes(struct.pack('<i',1)+st)
     school=text('A',60)+text('001',20)+b'\0'*(20*99)+struct.pack('<i',1)
     (d/'classes.dat').write_bytes(struct.pack('<i',1)+school)

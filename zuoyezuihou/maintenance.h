@@ -34,4 +34,36 @@ void csvImport(void);
 void csvExport(void);
 const char *displayName(const char *login);
 int pageNext(int count);
+extern int demoSeedVersion;
+int inputFinished(void);
+int validStudentId(const char *text);
+int validTeacherId(const char *text);
+int validPersonName(const char *text);
+InputStatus readStudentId(char *text, size_t size, const char *prompt);
+InputStatus readTeacherId(char *text, size_t size, const char *prompt);
+InputStatus readPersonName(char *text, size_t size, const char *prompt);
+int confirmAction(const char *prompt);
+typedef struct
+{
+    const char *label;
+    void (*action)(void);
+} MenuItem;
+int menuChoice(const char *title, const char *const *items, int count);
+void runMenu(const char *path, const MenuItem *items, int count);
+int selectTeachers(char chosen[MAX_TEACHERS_PER_STUDENT][20]);
+OperationResult createTeacher(const User *teacher, const char *name);
+OperationResult createStudent(const Student *student, int classIndex);
+void editStudent(void);
+void editTeacher(void);
+void editTeaching(void);
+void teacherList(void);
+void studentOverview(void);
+void teacherOverview(void);
+void classOverview(void);
+void systemHome(void);
+int selectCourse(char *course, size_t capacity);
+void adminScoreQuery(void);
+int migrateTeachers(void);
+int seedDemoData(int confirmed);
+void seedDemoMenu(void);
 #endif

@@ -152,6 +152,8 @@
     <ClInclude Include="teacher.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="input.c" />
+    <ClCompile Include="initialization.c" />
     <ClCompile Include="storage.c" />
     <ClCompile Include="classes.c" />
     <ClCompile Include="records.c" />
