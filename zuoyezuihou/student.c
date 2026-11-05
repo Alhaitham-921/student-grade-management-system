@@ -1,4 +1,5 @@
 #include "student.h"
+#include "maintenance.h"
 #include "admin.h"  // 用于访问 changePassword 函数
 
 // 查看我的成绩
@@ -16,7 +17,7 @@ void viewMyScores() {
     printf("授课教师: ");
     if (student->teacherCount == 0) printf("暂无授课教师\n");
     for (int i = 0; i < student->teacherCount; i++) {
-        printf("%s%s", student->teachers[i], i < student->teacherCount - 1 ? ", " : "\n");
+        printf("%s%s", displayName(student->teachers[i]), i < student->teacherCount - 1 ? ", " : "\n");
     }
 
     // 显示学生成绩
@@ -32,7 +33,7 @@ void studentMenu(void) {
     while (1) {
         clearScreen();
         printf("\n[学生菜单] - 当前用户: %s\n", currentUser.username);
-        printf("1. 查看我的成绩\n2. 修改密码\n3. 返回\n4. 选择班级\n选择: ");
+        printf("1. 查看我的成绩\n2. 修改密码\n3. 返回\n4. 查看班级（管理员分配）\n选择: ");
 
         choice = safeReadInt("", 1, 4);
 
@@ -46,7 +47,7 @@ void studentMenu(void) {
         case 3:
             return;
         case 4:
-            chooseMyClass(); break;
+            { int c=studentClass(currentUser.username); printf("班级: %s（管理员分配）\n", c<0?"未选择":schoolClasses[c].name); } break;
         }
 
         pauseScreen();

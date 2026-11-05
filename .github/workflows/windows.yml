@@ -1,0 +1,25 @@
+name: Windows build and regression
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+        platform: [x64, Win32]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build and test
+        shell: pwsh
+        run: ./build-test.ps1 -Configuration ${{ matrix.configuration }} -Platform ${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failures-${{ matrix.configuration }}-${{ matrix.platform }}
+          path: test-results/

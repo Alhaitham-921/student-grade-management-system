@@ -74,6 +74,9 @@
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
     <LocalDebuggerDebuggerType>NativeOnly</LocalDebuggerDebuggerType>
   </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile><PreprocessorDefinitions>$(ExtraDefines);%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -134,13 +137,26 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
+  <PropertyGroup Condition="'$(SGMSPortableBuild)'=='true'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(SGMSPortableBuild)'=='true'">
+    <ClCompile><DebugInformationFormat>OldStyle</DebugInformationFormat><SupportJustMyCode>false</SupportJustMyCode></ClCompile>
+    <Link><GenerateDebugInformation>false</GenerateDebugInformation></Link>
+  </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="maintenance.h" />
     <ClInclude Include="admin.h" />
     <ClInclude Include="student.h" />
     <ClInclude Include="system.h" />
     <ClInclude Include="teacher.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="storage.c" />
+    <ClCompile Include="classes.c" />
+    <ClCompile Include="records.c" />
+    <ClCompile Include="statistics.c" />
+    <ClCompile Include="csv.c" />
     <ClCompile Include="admin.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="student.c" />

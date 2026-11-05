@@ -1,4 +1,4 @@
-#include "system.h"
+#include "maintenance.h"
 #include <windows.h>
 #include "admin.h"
 #include "teacher.h"
@@ -7,9 +7,10 @@
 int main() {
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
+    if (!storageOpen()) return EXIT_FAILURE;
     loadAll();
     initSystem();
-    saveAll();
+    if (!saveAll()) return EXIT_FAILURE;
 
     int choice;
 

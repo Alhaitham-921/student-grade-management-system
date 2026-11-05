@@ -1,4 +1,5 @@
 #include "admin.h"
+#include "maintenance.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,17 +40,17 @@ void addStudent() {
 
     // 显示可选教师列表
     printf("\n可选教师列表:\n");
-    const int widths[] = {6, 20, 24};
-    const char* headers[] = {"序号", "教师", "任教科目"};
-    tableStart(3, widths, headers);
+    const int widths[] = {6, 20, 20, 24};
+    const char* headers[] = {"序号", "登录名", "显示姓名", "任教科目"};
+    tableStart(4, widths, headers);
     int availableTeachers[MAX_USERS];
     int availableTeacherCount = 0;
 
     for (int i = 0; i < userCount; i++) {
         if (users[i].type == TEACHER) {
             availableTeachers[availableTeacherCount++] = i;
-            tableRow("dss",
-                availableTeacherCount, users[i].username, users[i].teachCourse);
+            tableRow("dsss",
+                availableTeacherCount, users[i].username, displayName(users[i].username), users[i].teachCourse);
         }
     }
 
@@ -106,22 +107,24 @@ void addStudent() {
     // 添加学生到系统
     if (studentCount < MAX_STUDENTS) {
         students[studentCount++] = newStudent;
-        printf("学生 %s (学号: %s) 添加成功！\n", newStudent.name, newStudent.stuNum);
 
-        // 为学生创建默认用户账号（用户名=姓名，密码=学号）
+
+        // 为学生创建默认用户账号（用户名=学号，密码=学号）
         User studentUser = { 0 };
         strcpy(studentUser.username, newStudent.stuNum);
         hashPassword(newStudent.stuNum, studentUser.password);
         studentUser.type = STUDENT;
 
         if (userCount < MAX_USERS) {
+            userDisplayNames[userCount][0]=0;
             users[userCount++] = studentUser;
         }
         else {
             printf("警告：用户数量已达上限，未创建学生账号！\n");
         }
 
-        saveAll(); // 保存所有数据
+        auditEvent("student-create", newStudent.stuNum);
+        if (saveAll()) printf("学生添加成功！\n"); // 保存所有数据
     }
     else {
         printf("错误：学生数量已达上限！\n");
@@ -130,6 +133,7 @@ void addStudent() {
 
 // 添加教师
 void addTeacher() {
+    if (userCount >= MAX_USERS) { printf("用户数量已达上限！\n"); return; }
     User newTeacher = { 0 };
     newTeacher.type = TEACHER;
 
@@ -137,7 +141,7 @@ void addTeacher() {
 
     // 读取并验证用户名唯一性
     while (1) {
-        safeReadString(newTeacher.username, sizeof(newTeacher.username), "教师姓名: ");
+        safeReadString(newTeacher.username, sizeof(newTeacher.username), "教师登录名（稳定标识）: ");
 
         if (userExists(newTeacher.username)) {
             printf("错误：该用户名已存在！请重新输入。\n");
@@ -154,9 +158,11 @@ void addTeacher() {
 
     // 添加教师到系统
     if (userCount < MAX_USERS) {
+        userDisplayNames[userCount][0]=0;
         users[userCount++] = newTeacher;
-        printf("教师 %s (科目: %s) 添加成功！\n", newTeacher.username, newTeacher.teachCourse);
-        saveAll(); // 保存所有数据
+
+        auditEvent("teacher-create", newTeacher.username);
+        if (saveAll()) printf("教师添加成功！\n"); // 保存所有数据
     }
     else {
         printf("错误：用户数量已达上限！\n");
@@ -200,25 +206,26 @@ void deleteStudent() {
         if (users[i].type == STUDENT && strcmp(users[i].username, deletedId) == 0) {
             for (int j = i; j < userCount - 1; j++) {
                 users[j] = users[j + 1];
+                strcpy(userDisplayNames[j], userDisplayNames[j + 1]);
             }
             userCount--;
             break;
         }
     }
 
-    printf("学生删除成功！\n");
-    saveAll(); // 保存所有数据
+    auditEvent("student-delete", deletedId);
+    if (saveAll()) printf("学生删除成功！\n"); // 保存所有数据
 }
 
 // 查看所有用户
 void viewAllUsers() {
     printf("\n[所有用户]\n");
-    const int widths[] = {10, 20, 24, 10};
-    const char* headers[] = {"类型", "用户名", "任教科目", "密码"};
-    tableStart(4, widths, headers);
+    const int widths[] = {10, 20, 20, 24, 10};
+    const char* headers[] = {"类型", "用户名", "显示姓名", "任教科目", "密码"};
+    tableStart(5, widths, headers);
     for (int i = 0; i < userCount; ++i) {
         const char* type = users[i].type == ADMIN ? "管理员" : users[i].type == TEACHER ? "教师" : "学生";
-        tableRow("ssss", type, users[i].username, users[i].type == TEACHER ? users[i].teachCourse : "--", "******");
+        tableRow("sssss", type, users[i].username, displayName(users[i].username), users[i].type == TEACHER ? users[i].teachCourse : "--", "******");
     }
     tableEnd();
 }
@@ -263,8 +270,8 @@ void changePassword() {
         }
     }
 
-    printf("密码修改成功！\n");
-    saveAll(); // 保存所有数据
+    auditEvent("password-change", currentUser.username);
+    if (saveAll()) printf("密码修改成功！\n"); // 保存所有数据
 }
 
 // 清空所有用户
@@ -279,6 +286,7 @@ void clearAllUsers() {
     }
 
     // 清空用户数组，保留默认管理员
+    memset(userDisplayNames,0,sizeof(userDisplayNames));
     userCount = 1;
     strcpy(users[0].username, "admin");
     strcpy(users[0].password, currentUser.password);
@@ -288,8 +296,8 @@ void clearAllUsers() {
     studentCount = 0;
     for (int i = 0; i < classCount; ++i) schoolClasses[i].count = 0;
 
-    printf("所有用户数据已清空！\n");
-    saveAll(); // 保存所有数据
+    auditEvent("users-clear", "all students and teachers");
+    if (saveAll()) printf("所有用户数据已清空！\n"); // 保存所有数据
 }
 
 // 管理员菜单
@@ -301,9 +309,9 @@ void adminMenu(void) {
         printf("\n[管理员菜单] - 当前用户: %s\n", currentUser.username);
         printf("1. 添加学生\n2. 添加教师\n3. 删除学生\n");
         printf("4. 查看所有用户\n5. 修改密码\n6. 清空所有用户\n");
-        printf("7. 返回\n8. 添加班级\n9. 查看班级\n10. 查看所有学生\n11. 查看所有成绩\n选择: ");
+        printf("7. 返回\n8. 添加班级\n9. 查看班级\n10. 查看所有学生\n11. 查看所有成绩\n12. 班级管理\n13. 编辑档案\n14. 搜索学生\n15. 操作日志\n选择: ");
 
-        choice = safeReadInt("", 1, 11);
+        choice = safeReadInt("", 1, 15);
 
         switch (choice) {
         case 1: addStudent(); break;
@@ -317,6 +325,10 @@ void adminMenu(void) {
         case 9: listClasses(); break;
         case 10: listStudentsAndScores(0); break;
         case 11: listStudentsAndScores(1); break;
+        case 12: classManagement(); break;
+        case 13: editRecords(); break;
+        case 14: searchRecords(); break;
+        case 15: showAudit(); break;
         }
 
         pauseScreen();

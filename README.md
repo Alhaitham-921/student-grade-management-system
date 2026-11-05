@@ -1,41 +1,46 @@
 # 学生成绩管理系统
 
-使用 C 语言实现的 Windows 控制台学生成绩管理系统，提供管理员、教师、学生三种角色，以及学生档案、班级、成绩管理、CSV 成绩导入和统计等功能。
+C 语言实现的 Windows 控制台系统，面向 Visual Studio 2022 / v143。
 
-## 项目目录
+## 构建和测试
 
-| 目录 | 内容 |
-| --- | --- |
-| `zuoyezuihou/` | 当前维护的源码、Visual Studio 工程与回归测试 |
-| `修复前备份/` | 修复前的源代码，供缺陷复现与对比 |
-| `修复版手工测试/` | 手工测试源码副本、说明和 CSV 导入测试文件 |
-| `文档制作/` | 修改前后对比文档的生成脚本 |
-
-根目录还包含辅助 Python 脚本。账号和学生数据（`*.dat`）、课程文档、编译输出、IDE 缓存和重复压缩包保留在本地，不纳入版本控制。
-
-## 编译运行
-
-1. 在 Windows 上安装 Visual Studio 2022，选择“使用 C++ 的桌面开发”，安装 v143 工具集与 Windows SDK。
-2. 打开 `zuoyezuihou/zuoyezuihou.sln`。
-3. 选择 `Debug / x64` 并生成项目。
-4. 将调试工作目录设为 `$(ProjectDir)`，然后按 Ctrl+F5 运行。
-
-首次在空数据目录启动时，默认管理员为 `admin / admin`，登录后必须修改默认密码。详细功能、数据格式和注意事项见 [运行说明](zuoyezuihou/运行说明.md)。
-
-## 回归测试
-
-先生成 `Debug / x64`，然后在 `zuoyezuihou` 目录运行（需 Python 3）：
+安装 VS2022“使用 C++ 的桌面开发”（含 Windows SDK）和 Python 3.11+，在仓库根目录运行：
 
 ```powershell
-python verify_fixes.py
-python verify_classes.py
-python verify_tables.py
+.\build-test.ps1
+# 仅生成程序
+.\build-test.ps1 -BuildOnly
+# 其他配置
+.\build-test.ps1 -Configuration Release -Platform Win32
 ```
 
-测试在临时目录中运行。`verify_fixes.py` 最后一项旧数据迁移测试依赖本地 `users.dat` 和 `students.dat`，这两个文件不随仓库上传；全新克隆需自行提供相应测试数据才能运行这一项。手工测试请先编译 `修复版手工测试/zuoyezuihou.sln`，再阅读该目录的说明；其中提到的已有示例账号与学生数据仅存在于本地副本，CSV 文件本身不会建立这些账号。
+脚本通过 vswhere 定位 VS2022、初始化工具环境并生成 `build/<时间>/zuoyezuihou.exe`。默认使用嵌入对象的编译调试信息、禁用链接 PDB 和增量链接，避免本机 PDB 服务版本冲突；Visual Studio 内常规调试配置保留。测试专用故障注入 exe 单独生成在 `fault-tests/`，正式 exe 不包含该入口。
 
-## 版本维护
+测试日志、匿名样本、失败现场保留在 `test-results/<时间>/`，不依赖真实数据，不自动清理。五组回归覆盖账号、旧格式迁移、班级、表格、CSV、统计、保存失败和进程中断恢复。GitHub Actions 对 Debug/Release × x64/Win32 运行同一入口。
 
-当前开发目录为 `zuoyezuihou/`，修复前备份用于保留原始对比依据。后续修改通过 Git 提交记录，并推送到本仓库的 `main` 分支。
+也可打开 `zuoyezuihou/zuoyezuihou.sln` 生成，工作目录设为 `$(ProjectDir)`。手动运行单个脚本时可用 `SGMS_EXE` 指定 exe；`verify_storage.py` 还需 `SGMS_FAULT_EXE`，建议使用一键入口。
 
-仓库路径使用 `student-grade-management-system`，中文项目名称为“学生成绩管理系统”。
+## 功能
+
+- 三角色登录、密码加盐 PBKDF2-HMAC-SHA256、首次管理员强制改密、进程内登录冷却。
+- 管理员创建/重命名/停用班级、查看成员、分班/转班；学生只查看班级。
+- 编辑学生姓名、教师显示姓名和授课关系；教师登录名保持稳定。
+- 学号/部分姓名搜索、班级筛选、分页表格。
+- 教师在授权范围内录入和修改任教科目成绩；按班级查询和统计，排名同分并列（1、1、3）。
+- CSV 导入预览确认、逐行错误清单和整批提交；按班级和任教科目导出，支持 UTF-8 BOM、引号和逗号。
+- 版本化 DAT 数据集提交、完整迁移副本、单实例写入保护、操作日志。
+
+默认管理员 `admin / admin`，首次登录必须改为至少 6 字节密码；学生初始密码为学号。详见 [运行说明](zuoyezuihou/运行说明.md)。
+
+## 数据和目录
+
+- `zuoyezuihou/`：当前维护源码、工程和测试。
+- `修复前备份/`：原始备份，不改动。
+- `修复版手工测试/`：历史手工测试副本；新增功能请使用当前维护工程，历史演示账号并非随仓库提供。
+- `文档制作/`：历史对比材料脚本。
+
+新数据保存于运行工作目录 `.sgms/`；备份必须完整复制该目录。原 `users.dat`、`students.dat`、`classes.dat` 仅作为首次升级输入，升级后不再更新，不能把它们当作最新备份。原文件和 `legacy-backup-*` 完整副本均保留。版本目录不会自动清理。
+
+容量仍为 100 用户（含管理员、教师、学生）、100 学生、50 班级；每名学生最多 10 门成绩和 10 位教师。SQLite、学期和考试批次属于后续工作。
+
+不提交业务数据、日志、编译产物、IDE 缓存或凭据。项目仓库为 `https://github.com/Alhaitham-921/student-grade-management-system`。

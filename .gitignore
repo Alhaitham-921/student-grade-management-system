@@ -45,3 +45,10 @@ tmp*/
 *.pptx
 /作业要求.txt
 /修复版手工测试/表格效果预览.txt
+
+# Versioned datasets, migration copies, and repeatable build/test artifacts
+/build/
+/test-results/
+.sgms/
+.sgms.lock
+legacy-backup-*/

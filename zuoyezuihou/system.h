@@ -70,7 +70,7 @@ int verifyPassword(const char* plain, const char* encoded);
 void clearScreen(void);
 void pauseScreen(void);
 void loadAll();
-void saveAll();
+int saveAll(void);
 int login(UserType requiredType);
 void safeReadString(char* buffer, size_t size, const char* prompt);
 int safeReadInt(const char* prompt, int min, int max);

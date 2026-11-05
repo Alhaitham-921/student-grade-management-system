@@ -1,4 +1,4 @@
-#include "system.h"
+#include "maintenance.h"
 #include <errno.h>
 #include <stdarg.h>
 #include <ctype.h>
@@ -70,7 +70,10 @@ void safeReadString(char* buffer, size_t size, const char* prompt) {
         int nonempty = 0;
         for (size_t i = 0; buffer[i]; ++i)
             if (!isspace((unsigned char)buffer[i])) nonempty = 1;
-        if (nonempty) return;
+        if (nonempty) {
+            if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, buffer, -1, NULL, 0)) return;
+            printf("输入必须为有效UTF-8文本。\n"); continue;
+        }
         printf("输入不能为空！\n");
     }
 }
@@ -121,7 +124,7 @@ void initSystem() {
         hashPassword("admin", admin.password);
         admin.type = ADMIN;
         users[userCount++] = admin;
-        saveAll();
+        if (!saveAll()) exit(EXIT_FAILURE);
         printf("初始管理员账户已创建（用户名: admin, 密码: admin）\n");
         printf("请登录后修改默认密码！\n");
     }
@@ -154,6 +157,8 @@ static void loadRecords(const char* path, void* records, size_t stride, int* cou
 }
 #define TERMINATED(x) (memchr((x), 0, sizeof(x)) != NULL)
 void loadAll(void) {
+    if (storageLoad()) return;
+    storageBackupLegacy();
     // Detect and migrate the original 76-byte User records.
     FILE* legacy = fopen("users.dat", "rb");
     int oldFormat = 0;
@@ -250,25 +255,11 @@ void loadAll(void) {
         }
     }
     refreshAverages();
+    for (int i=0;i<userCount;i++) snprintf(userDisplayNames[i],60,"%s",users[i].username);
+    storageBaseline();
 }
-static void saveRecords(const char* path, const void* records, size_t stride, int count) {
-    char temp[64];
-    sprintf(temp, "%s.tmp", path);
-    FILE* file = fopen(temp, "wb");
-    if (!file) { fprintf(stderr, "无法写入 %s，请检查目录权限。\n", path); exit(EXIT_FAILURE); }
-    int ok = fwrite(&count, sizeof(count), 1, file) == 1 &&
-        fwrite(records, stride, count, file) == (size_t)count;
-    if (fclose(file) != 0) ok = 0;
-    if (!ok || !MoveFileExA(temp, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        fprintf(stderr, "保存 %s 失败，原文件未覆盖。\n", path); exit(EXIT_FAILURE);
-    }
-}
-void saveAll(void) {
-    refreshAverages();
-    saveRecords("users.dat", users, sizeof(User), userCount);
-    saveRecords("students.dat", students, sizeof(Student), studentCount);
-    saveRecords("classes.dat", schoolClasses, sizeof(SchoolClass), classCount);
-}
+
+int saveAll(void) { return storageCommit(); }
 
 // 检查用户是否存在
 int userExists(const char* username) {
@@ -329,10 +320,12 @@ int login(UserType requiredType) {
                     printf("首次登录必须修改默认密码（至少6个字节）。\n");
                     do { changePassword(); } while (verifyPassword("admin", currentUser.password));
                 }
+                auditLogin(username, 1);
                 return 1;
             }
         }
 
+        auditLogin(username, 0);
         attempts--;
         printf("用户名、密码或用户类型错误，你还有 %d 次尝试机会。\n", attempts);
     }
@@ -341,57 +334,6 @@ int login(UserType requiredType) {
     printf("登录失败，锁定一分钟！\n");
     return 0;
 }
-int studentClass(const char* id) {
-    for (int i = 0; i < classCount; ++i)
-        for (int j = 0; j < schoolClasses[i].count; ++j)
-            if (!strcmp(id, schoolClasses[i].members[j])) return i;
-    return -1;
-}
-void removeClassMember(const char* id) {
-    for (int i = 0; i < classCount; ++i) {
-        SchoolClass* c = &schoolClasses[i];
-        for (int j = 0; j < c->count; ++j) {
-            if (strcmp(id, c->members[j])) continue;
-            memmove(c->members[j], c->members[j+1], (c->count-j-1)*STU_NUM_LEN);
-            --c->count; break;
-        }
-    }
-}
-void listClasses(void) {
-    const int widths[] = {6, 40, 10};
-    const char* headers[] = {"序号", "班级", "人数"};
-    tableStart(3, widths, headers);
-    for (int i = 0; i < classCount; ++i)
-        tableRow("dsd", i+1, schoolClasses[i].name, schoolClasses[i].count);
-    tableEnd();
-    if (!classCount) printf("暂无班级，请联系管理员添加。\n");
-}
-int selectClass(void) {
-    listClasses();
-    if (!classCount) return -1;
-    return safeReadInt("选择班级序号 (0取消): ", 0, classCount)-1;
-}
-void addClass(void) {
-    if (classCount >= MAX_CLASSES) { printf("班级数量已达上限！\n"); return; }
-    char name[CLASS_NAME_LEN];
-    safeReadString(name, sizeof(name), "班级名称: ");
-    for (int i = 0; i < classCount; ++i)
-        if (!strcmp(name, schoolClasses[i].name)) { printf("班级已存在！\n"); return; }
-    memset(&schoolClasses[classCount], 0, sizeof(SchoolClass));
-    strcpy(schoolClasses[classCount++].name, name);
-    saveAll(); printf("班级添加成功！\n");
-}
-void chooseMyClass(void) {
-    Student* st = findStudentByUsername(currentUser.username);
-    if (!st) return;
-    int c = selectClass();
-    if (c < 0) return;
-    if (schoolClasses[c].count >= MAX_STUDENTS) { printf("班级已满！\n"); return; }
-    removeClassMember(st->stuNum);
-    strcpy(schoolClasses[c].members[schoolClasses[c].count++], st->stuNum);
-    saveAll(); printf("已选择班级: %s\n", schoolClasses[c].name);
-}
-
 /* UTF-8 terminal cells: Chinese/full-width characters occupy two columns.
    Clip whole code points with an ellipsis rather than spilling into the next cell. */
 static int tableColumns;
@@ -427,7 +369,7 @@ static void tableCell(const char* text, int width) {
         unsigned int cp = nextCodePoint(&s);
         int w = cellWidth(cp);
         if (used + w > limit) break;
-        if (cp < 32 || (cp >= 127 && cp < 160)) putchar('?');
+        if (cp < 32 || cp == '|' || (cp >= 127 && cp < 160)) putchar('?');
         else fwrite(start, 1, s-start, stdout);
         used += w;
     }
@@ -472,35 +414,5 @@ void printStudentCourses(const Student* st) {
     tableEnd();
     if (!st->courseCount) printf("暂无成绩记录。\n");
 }
-static int canListStudent(const Student* st) {
-    if (currentUser.type == ADMIN) return 1;
-    if (currentUser.type != TEACHER) return 0;
-    for (int j = 0; j < st->teacherCount; ++j)
-        if (!strcmp(st->teachers[j], currentUser.username)) return 1;
-    return 0;
-}
-void listStudentsAndScores(int scores) {
-    const int widths[] = {6, 20, 16, 24, 20, 10};
-    const char* studentHeaders[] = {"序号", "学号", "姓名", "班级", "科目数", "平均分"};
-    const char* scoreHeaders[] = {"序号", "学号", "姓名", "班级", "科目", "成绩"};
-    tableStart(6, widths, scores ? scoreHeaders : studentHeaders);
-    int count = 0;
-    for (int i = 0; i < studentCount; ++i) {
-        Student* st = &students[i];
-        if (!canListStudent(st)) continue;
-        int c = studentClass(st->stuNum);
-        const char* name = c < 0 ? "未选择" : schoolClasses[c].name;
-        if (!scores) {
-            char average[32];
-            if (st->courseCount) snprintf(average, sizeof(average), "%.1f", st->average);
-            else strcpy(average, "--");
-            tableRow("dsssds", ++count, st->stuNum, st->name, name, st->courseCount, average);
-        } else if (!st->courseCount) {
-            tableRow("dsssss", ++count, st->stuNum, st->name, name, "暂无成绩", "--");
-        } else for (int j = 0; j < st->courseCount; ++j) {
-            tableRow("dssssf", ++count, st->stuNum, st->name, name, st->courses[j].course, (double)st->courses[j].score);
-        }
-    }
-    tableEnd();
-    if (!count) printf("暂无可查看的记录。\n");
-}
+
+void listStudentsAndScores(int scores) { filteredList(scores); }
