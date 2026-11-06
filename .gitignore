@@ -55,3 +55,7 @@ legacy-backup-*/
 
 # Explicit backups made before local dataset initialization
 /local-backups/
+# Web build and dependencies
+/web/node_modules/
+/web/dist/
+/web/routes.inc
