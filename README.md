@@ -16,7 +16,7 @@ C 语言实现的 Windows 控制台系统，面向 Visual Studio 2022 / v143。
 
 脚本通过 vswhere 定位 VS2022、初始化工具环境并生成 `build/<时间>/zuoyezuihou.exe`。默认使用嵌入对象的编译调试信息、禁用链接 PDB 和增量链接，避免本机 PDB 服务版本冲突；Visual Studio 内常规调试配置保留。测试专用故障注入 exe 单独生成在 `fault-tests/`，正式 exe 不包含该入口。
 
-测试日志、匿名样本、失败现场保留在 `test-results/<时间>/`，不依赖真实数据，不自动清理。六组回归覆盖账号、旧格式迁移、班级、表格、CSV、统计、保存失败和进程中断恢复。GitHub Actions 对 Debug/Release × x64/Win32 运行同一入口。
+测试日志、匿名样本、失败现场保留在 `test-results/<时间>/`，不依赖真实数据，不自动清理。七组回归覆盖账号、旧格式迁移、班级、表格、CSV、统计、保存失败和进程中断恢复。GitHub Actions 对 Debug/Release × x64/Win32 运行同一入口。
 
 也可打开 `zuoyezuihou/zuoyezuihou.sln` 生成，工作目录设为 `$(ProjectDir)`。手动运行单个脚本时可用 `SGMS_EXE` 指定 exe；`verify_storage.py` 还需 `SGMS_FAULT_EXE`，建议使用一键入口。
 
@@ -54,3 +54,5 @@ C 语言实现的 Windows 控制台系统，面向 Visual Studio 2022 / v143。
 容量仍为 100 用户（含管理员、教师、学生）、100 学生、50 班级；每名学生最多 10 门成绩和 10 位教师。SQLite、学期和考试批次属于后续工作。
 
 不提交业务数据、日志、编译产物、IDE 缓存或凭据。项目仓库为 `https://github.com/Alhaitham-921/student-grade-management-system`。
+
+登录账号处支持q/Q/:q取消；菜单数字允许首尾空白。登录、改密和教师初始密码在真实控制台不回显。学生示例账号240101001，初始密码同学号；已有密码不重置。

@@ -25,7 +25,7 @@ void addTeacher(void)
         return;
     for (;;)
     {
-        if (safeReadString(password, sizeof(password), "初始密码（至少6字节，:q取消）: ") != INPUT_OK)
+        if (readPassword(password, sizeof(password), "初始密码（至少6字节，:q取消）: ") != INPUT_OK)
             return;
         if (strlen(password) >= 6)
             break;
@@ -135,7 +135,7 @@ void viewAllUsers(void)
 void changePassword(void)
 {
     char old[20], pass[20], again[20];
-    if (safeReadString(old, 20, "当前密码 (:q取消): ") != INPUT_OK)
+    if (readPassword(old, 20, "当前密码 (:q取消): ") != INPUT_OK)
         return;
     if (!verifyPassword(old, currentUser.password))
     {
@@ -144,8 +144,8 @@ void changePassword(void)
     }
     for (;;)
     {
-        if (safeReadString(pass, 20, "新密码 (:q取消): ") != INPUT_OK ||
-            safeReadString(again, 20, "再次输入新密码 (:q取消): ") != INPUT_OK)
+        if (readPassword(pass, 20, "新密码 (:q取消): ") != INPUT_OK ||
+            readPassword(again, 20, "再次输入新密码 (:q取消): ") != INPUT_OK)
             return;
         if (strlen(pass) < 6)
         {

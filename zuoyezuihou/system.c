@@ -246,7 +246,10 @@ int login(UserType requiredType) {
         printf("\n[登录 - %s用户]\n",
             requiredType == ADMIN ? "管理员" :
             requiredType == TEACHER ? "教师" : "学生");
-        if(safeReadString(username,sizeof(username),"账号 (:q取消): ")!=INPUT_OK||safeReadString(password,sizeof(password),"密码 (:q取消): ")!=INPUT_OK)return 0;
+        if(requiredType==STUDENT)printf("学生账号为完整学号，初始密码与学号相同；修改后请使用新密码。\n");
+        if(safeReadString(username,sizeof(username),"账号（q或:q返回）: ")!=INPUT_OK)return 0;
+        if(!strcmp(username,"q")||!strcmp(username,"Q")){printf("已返回登录入口，不扣除尝试次数。\n");return 0;}
+        if(readPassword(password,sizeof(password),"密码（输入时不显示，:q返回）: ")!=INPUT_OK)return 0;
 
         for (int i = 0; i < userCount; i++) {
             if (strcmp(users[i].username, username) == 0 &&

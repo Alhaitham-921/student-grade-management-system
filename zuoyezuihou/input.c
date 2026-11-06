@@ -86,6 +86,14 @@ int safeReadInt(const char *prompt, int min, int max)
     {
         if (readLine(text, sizeof(text), prompt) != INPUT_OK)
             return -1;
+        /* Console users often paste a choice with surrounding whitespace. */
+        char *first = text;
+        while (*first == ' ' || *first == '\t')
+            first++;
+        memmove(text, first, strlen(first) + 1);
+        size_t length = strlen(text);
+        while (length && (text[length - 1] == ' ' || text[length - 1] == '\t'))
+            text[--length] = 0;
         int digits = text[0] != 0;
         for (size_t i = 0; text[i]; i++)
             if (text[i] < '0' || text[i] > '9')
@@ -237,4 +245,29 @@ void pauseScreen(void)
         char text[8];
         readLine(text, sizeof(text), "按回车继续...");
     }
+}
+
+InputStatus readPassword(char *buffer, size_t size, const char *prompt)
+{
+    HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD mode = 0;
+    int console = GetConsoleMode(input, &mode) != 0;
+    if (console && !SetConsoleMode(input, mode & ~ENABLE_ECHO_INPUT))
+    {
+        printf("无法关闭密码回显，已取消输入。\n");
+        return INPUT_CANCEL;
+    }
+    InputStatus result = safeReadString(buffer, size, prompt);
+    if (console)
+    {
+        if (!SetConsoleMode(input, mode))
+        {
+            fprintf(stderr, "恢复终端输入模式失败，请重新打开程序。\n");
+            buffer[0] = 0;
+            ended = 1;
+            return INPUT_END;
+        }
+        putchar('\n');
+    }
+    return result;
 }

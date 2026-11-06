@@ -36,6 +36,7 @@ const char *displayName(const char *login);
 int pageNext(int count);
 extern int demoSeedVersion;
 int inputFinished(void);
+InputStatus readPassword(char *buffer, size_t size, const char *prompt);
 int validStudentId(const char *text);
 int validTeacherId(const char *text);
 int validPersonName(const char *text);
