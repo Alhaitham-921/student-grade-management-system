@@ -186,6 +186,7 @@ void loadAll(void) {
     for (int i = 0; i < classCount; ++i) {
         SchoolClass* c = &schoolClasses[i];
         if (!TERMINATED(c->name) || !c->name[0] || c->count < 0 || c->count > MAX_STUDENTS) dataError("classes.dat");
+        if (oldFormat) migrateText(c->name, sizeof(c->name));
         for (int k = 0; k < i; ++k)
             if (!strcmp(c->name, schoolClasses[k].name)) dataError("classes.dat");
         for (int j = 0; j < c->count; ++j) {

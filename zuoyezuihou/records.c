@@ -94,7 +94,7 @@ int selectTeachers(char chosen[MAX_TEACHERS_PER_STUDENT][20])
         printf("暂无姓名完整的教师，请先添加教师或完善姓名。\n");
         return -1;
     }
-    while (count < MAX_TEACHERS_PER_STUDENT)
+    for (;;)
     {
         int k = safeReadInt("教师序号（0完成，:q取消）: ", 0, n);
         if (k < 0)
@@ -108,6 +108,11 @@ int selectTeachers(char chosen[MAX_TEACHERS_PER_STUDENT][20])
         if (duplicate)
         {
             printf("该教师已选择！\n");
+            continue;
+        }
+        if (count >= MAX_TEACHERS_PER_STUDENT)
+        {
+            printf("最多选择%d位教师，请输入0完成或:q取消。\n", MAX_TEACHERS_PER_STUDENT);
             continue;
         }
         strcpy(chosen[count++], users[u].username);

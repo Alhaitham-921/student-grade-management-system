@@ -18,6 +18,11 @@ static void key(WORD vk, wchar_t ch)
     if (!WriteConsoleInputW(inputHandle, &r, 1, &written) || written != 1)
         InterlockedExchange(&failed, 1);
 }
+static void textKeys(const wchar_t *text)
+{
+    for (; *text; text++)
+        key(*text == L'\r' ? VK_RETURN : 0, *text);
+}
 static int starsAtCursor(int stars)
 {
     CONSOLE_SCREEN_BUFFER_INFO info;
@@ -115,6 +120,66 @@ int verifyConsolePassword(void)
         fprintf(stderr, "Console cancel/EOF restoration check failed %lu\n", GetLastError());
         return 1;
     }
+    textKeys(L":q\r");
+    if (readPassword(password, sizeof(password), "Password: ") != INPUT_CANCEL ||
+        !GetConsoleMode(inputHandle, &after) || after != original)
+    {
+        fprintf(stderr, "Console typed cancellation failed\n");
+        return 1;
+    }
+    key('C', 3);
+    if (readPassword(password, sizeof(password), "Password: ") != INPUT_CANCEL ||
+        !GetConsoleMode(inputHandle, &after) || after != original)
+    {
+        fprintf(stderr, "Console Ctrl+C cancellation failed\n");
+        return 1;
+    }
+    textKeys(L"aaaaaaaaaaaaaaaaaaaa\rbbbbbb\r");
+    if (readPassword(password, sizeof(password), "Password: ") != INPUT_OK || strcmp(password, "bbbbbb") ||
+        !GetConsoleMode(inputHandle, &after) || after != original)
+    {
+        fprintf(stderr, "Console overlong-password retry failed\n");
+        return 1;
+    }
+    if (freopen_s(&console, "CONIN$", "r", stdin))
+    {
+        fprintf(stderr, "Console standard-input binding failed\n");
+        return 1;
+    }
+    /* freopen replaces the OS standard handle with its CRT-owned read-only
+       handle. Preserve the read/write handle used by the real password reader. */
+    if (!SetStdHandle(STD_INPUT_HANDLE, inputHandle))
+    {
+        fprintf(stderr, "Console standard-handle restoration failed\n");
+        return 1;
+    }
+    /* Exercise the actual terminal branch; redirected Python tests skip pageNext. */
+    textKeys(L"0\r1\r");
+    if (!pageNext(10))
+    {
+        fprintf(stderr, "Console pagination invalid-input/continue failed\n");
+        return 1;
+    }
+    textKeys(L"2\r");
+    if (pageNext(20))
+    {
+        fprintf(stderr, "Console pagination return failed\n");
+        return 1;
+    }
+    textKeys(L"4\r");
+    if (safeReadInt("Choice: ", 1, 4) != 4)
+    {
+        fprintf(stderr, "Console line input after masked password failed\n");
+        return 1;
+    }
+    textKeys(L"abcdef\r");
+    result = readPassword(password, sizeof(password), "Password: ");
+    if (result != INPUT_OK || strcmp(password, "abcdef"))
+    {
+        fprintf(stderr, "Console masked password after line input failed result=%d length=%zu keyError=%ld modeOK=%d win32=%lu\n",
+                result, strlen(password), failed, GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &after), GetLastError());
+        return 1;
+    }
     key('Z', 26);
     if (readPassword(password, sizeof(password), "Password: ") != INPUT_END || !GetConsoleMode(inputHandle, &after) ||
         after != original)
@@ -126,7 +191,8 @@ int verifyConsolePassword(void)
     CloseHandle(outputHandle);
     FreeConsole();
     fprintf(stderr, "PASS: real Win32 console shows stars, hides characters, supports backspace, Escape/EOF and "
-                    "restores console mode\n");
+                    "restores console mode; typed/Ctrl+C cancellation, overlong retry, real pagination and "
+                    "line/password input transitions\n");
     return 0;
 }
 #endif

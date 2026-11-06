@@ -33,7 +33,7 @@ if (!$BuildOnly) {
     if ($LASTEXITCODE -ne 0) { throw "Fault test build failed; logs: $logs" }
     $env:SGMS_FAULT_EXE = Join-Path $faultOutput 'zuoyezuihou.exe'
 
-    foreach ($suite in @('verify_fixes.py','verify_classes.py','verify_tables.py','verify_robustness.py','verify_storage.py','verify_menu_data.py','verify_login.py','verify_clients.py')) {
+    foreach ($suite in @('verify_fixes.py','verify_classes.py','verify_tables.py','verify_robustness.py','verify_storage.py','verify_menu_data.py','verify_login.py','verify_clients.py','verify_workflows.py')) {
         & python -X utf8 (Join-Path $PSScriptRoot "zuoyezuihou\$suite") 2>&1 | Tee-Object (Join-Path $logs "$suite.txt")
         if ($LASTEXITCODE -ne 0) { throw "Test failed: $suite; data and logs retained: $logs" }
     }

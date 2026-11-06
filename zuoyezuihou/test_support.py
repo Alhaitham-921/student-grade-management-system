@@ -8,9 +8,15 @@ RESULTS.mkdir(parents=True,exist_ok=True)
 def directory(label):
     return Path(tempfile.mkdtemp(prefix=label+'-',dir=RESULTS))
 def run(d, seq, *, env=None, expected=0, exe=None):
-    p=subprocess.run([str(exe or EXE)],cwd=d,input='\n'.join(map(str,seq))+'\n',encoding='utf-8',capture_output=True,timeout=30,env=dict(os.environ,**(env or {})))
-    out=p.stdout+p.stderr
+    p=subprocess.run([str(exe or EXE)],cwd=d,input=('\n'.join(map(str,seq))+'\n').encode('utf-8'),capture_output=True,timeout=30,env=dict(os.environ,**(env or {})))
+    raw=p.stdout+p.stderr
     index=len(list(d.glob('run-*.txt')))
+    try:
+        out=raw.decode('utf-8')
+    except UnicodeDecodeError as error:
+        evidence=d/f'run-{index:03}-invalid-utf8.bin'
+        evidence.write_bytes(raw)
+        raise AssertionError(f'Program emitted invalid UTF-8; raw output retained: {evidence}') from error
     (d/f'run-{index:03}.txt').write_text(f'exit={p.returncode}\n'+out,encoding='utf-8')
     assert p.returncode==expected,out
     return out
