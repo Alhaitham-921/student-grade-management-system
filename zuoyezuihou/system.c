@@ -249,7 +249,7 @@ int login(UserType requiredType) {
         if(requiredType==STUDENT)printf("学生账号为完整学号，初始密码与学号相同；修改后请使用新密码。\n");
         if(safeReadString(username,sizeof(username),"账号（q或:q返回）: ")!=INPUT_OK)return 0;
         if(!strcmp(username,"q")||!strcmp(username,"Q")){printf("已返回登录入口，不扣除尝试次数。\n");return 0;}
-        if(readPassword(password,sizeof(password),"密码（输入时不显示，:q返回）: ")!=INPUT_OK)return 0;
+        if(readPassword(password,sizeof(password),"密码（*掩码，:q或Esc返回）: ")!=INPUT_OK)return 0;
 
         for (int i = 0; i < userCount; i++) {
             if (strcmp(users[i].username, username) == 0 &&

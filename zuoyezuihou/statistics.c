@@ -8,6 +8,8 @@ void classStatistics(void)
 {
     if (currentUser.type != TEACHER && currentUser.type != ADMIN)
         return;
+    if (!requireTeacherStudents())
+        return;
     int c = selectClass();
     if (c < 0)
         return;
@@ -47,6 +49,8 @@ void classStatistics(void)
 void classRanking(void)
 {
     if (currentUser.type != TEACHER)
+        return;
+    if (!requireTeacherStudents())
         return;
     int c = selectClass();
     if (c < 0)
@@ -101,6 +105,8 @@ void classRanking(void)
 void classQuery(void)
 {
     if (currentUser.type != TEACHER)
+        return;
+    if (!requireTeacherStudents())
         return;
     int c = selectClass();
     if (c < 0)
@@ -199,6 +205,8 @@ int selectCourse(char *course, size_t capacity)
 void adminScoreQuery(void)
 {
     if (currentUser.type != ADMIN)
+        return;
+    if (!requireTeacherStudents())
         return;
     int c = selectClass();
     if (c < 0)

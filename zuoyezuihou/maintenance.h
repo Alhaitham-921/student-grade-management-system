@@ -26,6 +26,8 @@ void editRecords(void);
 void searchRecords(void);
 void filteredList(int scores);
 int hasTeacherAccess(const Student *st);
+int requireTeacherStudents(void);
+int teacherStudentCount(void);
 int courseIndex(const Student *st, const char *course);
 void classStatistics(void);
 void classRanking(void);

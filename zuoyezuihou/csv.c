@@ -113,6 +113,8 @@ void csvImport(void)
         printf("无权导入。\n");
         return;
     }
+    if (!requireTeacherStudents())
+        return;
     int c = selectClass();
     if (c < 0)
         return;
@@ -283,27 +285,78 @@ void csvExport(void)
         printf("无权导出。\n");
         return;
     }
+    if (!requireTeacherStudents())
+        return;
     int c = selectClass();
     if (c < 0)
         return;
     char course[30];
     if (!selectCourse(course, sizeof(course)))
         return;
+    int rows = 0;
+    for (int i = 0; i < studentCount; i++)
+        if (studentClass(students[i].stuNum) == c && hasTeacherAccess(&students[i]) &&
+            courseIndex(&students[i], course) >= 0)
+            rows++;
+    if (!rows)
+    {
+        printf("所选班级和科目没有可导出的授权成绩，不创建空文件。\n");
+        return;
+    }
     char path[512];
-    if (safeReadString(path, sizeof(path), "导出CSV新文件路径 (:q取消): ") != INPUT_OK)
-        return;
-    wchar_t wide[512];
-    if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, 512))
+    wchar_t wide[1024];
+    int fd = -1;
+    while (fd < 0)
     {
-        printf("路径编码无效。\n");
-        return;
+        if (safeReadString(path, sizeof(path), "导出CSV路径（新文件.csv或已有文件夹，:q取消）: ") != INPUT_OK)
+            return;
+        wchar_t entered[512];
+        if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, entered, 512))
+        {
+            printf("路径编码无效，请重新输入。\n");
+            continue;
+        }
+        DWORD attributes = GetFileAttributesW(entered);
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY))
+        {
+            SYSTEMTIME now;
+            GetLocalTime(&now);
+            wchar_t leaf[160];
+            swprintf(leaf, 160, L"scores_class%d_%04d%02d%02d_%02d%02d%02d_%lu.csv", c + 1, now.wYear, now.wMonth,
+                     now.wDay, now.wHour, now.wMinute, now.wSecond, GetTickCount());
+            if (wcslen(entered) + wcslen(leaf) + 2 >= 1024)
+            {
+                printf("路径过长，请换一个目录。\n");
+                continue;
+            }
+            swprintf(wide, 1024, L"%s\\%s", entered, leaf);
+        }
+        else
+        {
+            if (attributes != INVALID_FILE_ATTRIBUTES)
+            {
+                printf("导出文件已存在，不会覆盖；请换一个文件名，或:q取消。\n");
+                continue;
+            }
+            wcscpy(wide, entered);
+        }
+        fd = _wopen(wide, _O_WRONLY | _O_CREAT | _O_EXCL | _O_BINARY, _S_IREAD | _S_IWRITE);
+        if (fd < 0)
+        {
+            int error = errno;
+            if (error == EEXIST)
+                printf("导出文件已存在，不会覆盖。\n");
+            else if (error == ENOENT)
+                printf("父文件夹不存在或路径无效，请输入已有文件夹或有效的新文件路径。\n");
+            else if (error == EACCES)
+                printf("没有写入权限，或路径指向不可写对象；请选择可写目录（errno=%d）。\n", error);
+            else
+                printf("创建导出文件失败（errno=%d），请检查路径后重试。\n", error);
+        }
     }
-    int fd = _wopen(wide, _O_WRONLY | _O_CREAT | _O_EXCL | _O_BINARY, _S_IREAD | _S_IWRITE);
-    if (fd < 0)
-    {
-        printf("无法创建导出文件（路径可能已存在）errno=%d。\n", errno);
-        return;
-    }
+    char savedPath[4096];
+    if (!WideCharToMultiByte(CP_UTF8, 0, wide, -1, savedPath, sizeof(savedPath), NULL, NULL))
+        strcpy(savedPath, "（路径转换失败）");
     FILE *f = _fdopen(fd, "wb");
     if (!f)
     {
@@ -339,7 +392,7 @@ void csvExport(void)
     snprintf(detail, sizeof(detail), "class=%s course=%s rows=%d", schoolClasses[c].name, course, n);
     auditEvent("csv-export", detail);
     if (saveAll())
-        printf("成功导出 %d 条成绩。\n", n);
+        printf("成功导出 %d 条成绩。路径: %s\n", n, savedPath);
     else
         printf("导出文件已生成，但日志未提交。\n");
 }

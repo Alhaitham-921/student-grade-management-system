@@ -27,7 +27,10 @@ void viewMyScores(void)
     // 显示学生成绩
     printf("\n你的成绩:\n");
     printStudentCourses(student);
-    printf("平均分: %.1f\n", student->average);
+    if (student->courseCount)
+        printf("平均分: %.1f\n", student->average);
+    else
+        printf("平均分: --（尚无已录入成绩，不代表零分）\n");
 }
 
 static void myClass(void)

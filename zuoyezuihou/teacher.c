@@ -10,6 +10,8 @@ void addScores(void)
 {
     char stuNum[STU_NUM_LEN] = {0};
 
+    if (!requireTeacherStudents())
+        return;
     printf("\n[添加成绩]\n");
     int selectedClass = selectClass();
     if (selectedClass < 0)
@@ -23,10 +25,19 @@ void addScores(void)
     const int widths[] = {20, 16};
     const char *headers[] = {"学号", "姓名"};
     tableStart(2, widths, headers);
+    int visible = 0;
     for (int i = 0; i < studentCount; ++i)
         if (studentClass(students[i].stuNum) == selectedClass && hasTeacherAccess(&students[i]))
+        {
             tableRow("ss", students[i].stuNum, students[i].name);
+            visible++;
+        }
     tableEnd();
+    if (!visible)
+    {
+        printf("本班级没有你有授课权限的学生，无权添加成绩；请联系管理员分配。\n");
+        return;
+    }
     if (readStudentId(stuNum, sizeof(stuNum), "学生学号 (:q取消): ") != INPUT_OK)
         return;
 
@@ -73,6 +84,8 @@ void addScores(void)
 // 修改成绩
 void modifyScores(void)
 {
+    if (!requireTeacherStudents())
+        return;
     printf("\n[修改成绩]\n");
 
     // 收集当前教师有权限修改成绩的学生列表

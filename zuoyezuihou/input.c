@@ -225,6 +225,9 @@ void runMenu(const char *path, const MenuItem *items, int count)
         for (int i = 0; i < count; i++)
             labels[i] = items[i].label;
         printf("当前用户: %s\n", currentUser.username);
+        if (currentUser.type == TEACHER)
+            printf("教师姓名: %s | 任教科目: %s | 授权学生: %d人\n", displayName(currentUser.username),
+                   currentUser.teachCourse, teacherStudentCount());
         int choice = menuChoice(path, labels, count);
         if (choice < 1 || choice == count)
             return;
@@ -251,23 +254,104 @@ InputStatus readPassword(char *buffer, size_t size, const char *prompt)
 {
     HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
     DWORD mode = 0;
-    int console = GetConsoleMode(input, &mode) != 0;
-    if (console && !SetConsoleMode(input, mode & ~ENABLE_ECHO_INPUT))
+    if (!GetConsoleMode(input, &mode))
+        return safeReadString(buffer, size, prompt);
+    if (!SetConsoleMode(input, mode & ~(ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT)))
     {
-        printf("无法关闭密码回显，已取消输入。\n");
+        printf("无法启用密码掩码，已取消输入。\n");
         return INPUT_CANCEL;
     }
-    InputStatus result = safeReadString(buffer, size, prompt);
-    if (console)
+    InputStatus result = INPUT_CANCEL;
+    wchar_t text[256] = {0};
+    size_t length = 0;
+    buffer[0] = 0;
+    printf("%s", prompt);
+    fflush(stdout);
+    for (;;)
     {
-        if (!SetConsoleMode(input, mode))
+        INPUT_RECORD record;
+        DWORD n = 0;
+        if (!ReadConsoleInputW(input, &record, 1, &n) || !n)
         {
-            fprintf(stderr, "恢复终端输入模式失败，请重新打开程序。\n");
-            buffer[0] = 0;
             ended = 1;
-            return INPUT_END;
+            result = INPUT_END;
+            break;
         }
-        putchar('\n');
+        if (record.EventType != KEY_EVENT || !record.Event.KeyEvent.bKeyDown)
+            continue;
+        KEY_EVENT_RECORD key = record.Event.KeyEvent;
+        wchar_t ch = key.uChar.UnicodeChar;
+        if (key.wVirtualKeyCode == VK_ESCAPE || ch == 3)
+        {
+            printf("\n已取消操作。");
+            break;
+        }
+        if (ch == 26)
+        {
+            ended = 1;
+            result = INPUT_END;
+            break;
+        }
+        if (key.wVirtualKeyCode == VK_BACK)
+        {
+            for (WORD repeat = 0; repeat < key.wRepeatCount && length; repeat++)
+            {
+                length--;
+                if (length && text[length] >= 0xdc00 && text[length] <= 0xdfff && text[length - 1] >= 0xd800 &&
+                    text[length - 1] <= 0xdbff)
+                    length--;
+                text[length] = 0;
+                printf("\b \b");
+            }
+            fflush(stdout);
+            continue;
+        }
+        if (key.wVirtualKeyCode == VK_RETURN)
+        {
+            text[length] = 0;
+            if (!wcscmp(text, L":q"))
+            {
+                printf("\n已取消操作。");
+                break;
+            }
+            int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, -1, NULL, 0, NULL, NULL);
+            int nonempty = 0;
+            for (size_t i = 0; i < length; i++)
+                if (text[i] != L' ' && text[i] != L'\t')
+                    nonempty = 1;
+            if (nonempty && bytes > 0 && (size_t)bytes <= size)
+            {
+                WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, -1, buffer, (int)size, NULL, NULL);
+                result = INPUT_OK;
+                break;
+            }
+            printf("\n密码不能为空、编码无效或超过%zu字节，请重新输入。\n%s", size - 1, prompt);
+            length = 0;
+            text[0] = 0;
+            fflush(stdout);
+            continue;
+        }
+        if ((ch < 32 && ch != L'\t') || ch == 127)
+            continue;
+        for (WORD repeat = 0; repeat < key.wRepeatCount; repeat++)
+        {
+            if (length + 1 >= sizeof(text) / sizeof(text[0]))
+                continue;
+            text[length++] = ch;
+            text[length] = 0;
+            if (!(ch >= 0xdc00 && ch <= 0xdfff))
+                putchar('*');
+        }
+        fflush(stdout);
     }
+    SecureZeroMemory(text, sizeof(text));
+    if (!SetConsoleMode(input, mode))
+    {
+        fprintf(stderr, "恢复终端输入模式失败，请重新打开程序。\n");
+        buffer[0] = 0;
+        ended = 1;
+        return INPUT_END;
+    }
+    putchar('\n');
     return result;
 }

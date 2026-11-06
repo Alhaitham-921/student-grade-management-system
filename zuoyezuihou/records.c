@@ -339,6 +339,8 @@ static void renderList(int scores, int filter, const char *key)
     }
     tableEnd();
     printf("共 %d 条记录。\n", count);
+    if (!count)
+        printf(currentUser.type == TEACHER ? "所选范围内没有匹配的授权学生。\n" : "所选范围内没有匹配记录。\n");
 }
 void filteredList(int scores)
 {
@@ -347,6 +349,8 @@ void filteredList(int scores)
         printf("无权查看。\n");
         return;
     }
+    if (!requireTeacherStudents())
+        return;
     const char *m[] = {"全部", "按班级", "返回上一级"};
     int mode = menuChoice("列表范围", m, 3), c = -1;
     if (mode < 1 || mode == 3)
@@ -363,6 +367,8 @@ void searchRecords(void)
 {
     if (currentUser.type != ADMIN && currentUser.type != TEACHER)
         return;
+    if (!requireTeacherStudents())
+        return;
     char key[60];
     if (safeReadString(key, sizeof(key), "学号/部分姓名 (:q取消): ") != INPUT_OK)
         return;
@@ -377,4 +383,26 @@ void searchRecords(void)
             return;
     }
     renderList(0, c, key);
+}
+
+int teacherStudentCount(void)
+{
+    int n = 0;
+    if (currentUser.type != TEACHER)
+        return 0;
+    for (int i = 0; i < studentCount; i++)
+        if (hasTeacherAccess(&students[i]))
+            n++;
+    return n;
+}
+int requireTeacherStudents(void)
+{
+    if (currentUser.type != TEACHER)
+        return 1;
+    if (teacherStudentCount())
+        return 1;
+    printf("当前教师 %s（%s，科目：%s）尚未分配任何学生。\n请联系管理员：基础信息管理 → 教师管理 → "
+           "维护学生授课关系。\n不会显示其他教师的学生或成绩。\n",
+           currentUser.username, displayName(currentUser.username), currentUser.teachCourse);
+    return 0;
 }

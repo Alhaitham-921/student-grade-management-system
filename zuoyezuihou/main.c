@@ -5,6 +5,9 @@
 #include "student.h"
 int main(void)
 {
+#ifdef SGMS_TESTING
+    if(getenv("SGMS_CONSOLE_PASSWORD_TEST")){extern int verifyConsolePassword(void);return verifyConsolePassword();}
+#endif
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
     if (!storageOpen())

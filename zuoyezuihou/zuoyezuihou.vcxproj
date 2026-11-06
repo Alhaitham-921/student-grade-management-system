@@ -152,6 +152,7 @@
     <ClInclude Include="teacher.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="console_password_test.c" />
     <ClCompile Include="input.c" />
     <ClCompile Include="initialization.c" />
     <ClCompile Include="storage.c" />
