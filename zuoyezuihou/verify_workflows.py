@@ -166,7 +166,7 @@ def csv_rejections():
         'two-columns': b'001,Math\n',
         'five-columns': b'001,Same,Math,80,extra\n',
         'long-field': b'001,' + b'M' * 512 + b',80\n',
-        'nul': b'001,Math,8\x000\n',
+        'embedded-nul': b'001,Math,8\x000\n',
         'non-utf8': b'001,\xff,80\n',
         'mixed-columns': b'stuNum,name,course,score\n001,Math,80\n',
         'duplicate': b'001,Math,80\n001,Math,90\n',
